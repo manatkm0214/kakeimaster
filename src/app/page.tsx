@@ -584,6 +584,9 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
             {loading ? "処理中..." : isLogin ? "パスワードでログイン" : "登録する"}
           </button>
           {isLogin && (
+            <p className="text-[11px] text-slate-400">ログイン方法: パスワード / メールリンク / ワンタイムコード / LINE</p>
+          )}
+          {isLogin && (
             <div className="flex justify-between text-xs text-slate-400 pt-1">
               <button
                 type="button"
@@ -691,9 +694,14 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
             </div>
           )}
           {isLogin && !lineLoginEnabled && (
-            <p className="text-xs text-slate-400 text-center">
-              LINEログインは現在この環境で未対応です
-            </p>
+            <button
+              type="button"
+              disabled
+              className="w-full py-2.5 rounded-xl font-bold text-sm bg-slate-700/50 border border-slate-600 text-slate-400 cursor-not-allowed"
+              title="NEXT_PUBLIC_ENABLE_LINE_LOGIN=true とLINE設定が必要です"
+            >
+              LINEでログイン（設定中）
+            </button>
           )}
         </div>
 
