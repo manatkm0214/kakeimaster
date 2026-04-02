@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import Image from "next/image"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
 import { Transaction, Budget, Profile, NavPage, formatCurrency } from "@/lib/utils"
@@ -96,6 +97,7 @@ function AuthView({ onAuth }: { onAuth: () => void }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [lineQrUrl, setLineQrUrl] = useState<string | null>(null)
 
   async function handlePasswordLogin() {
     await handleSubmit()
@@ -186,11 +188,15 @@ function AuthView({ onAuth }: { onAuth: () => void }) {
     await handleOAuthLogin("github")
   }
 
-  async function handleOAuthLogin(provider: "google" | "github") {
+  async function handleLineLogin() {
+    await handleOAuthLogin("line")
+  }
+
+  async function handleOAuthLogin(provider: "google" | "github" | "line") {
     setLoading(true)
     const callbackUrl = getAuthCallbackUrl()
     const { data, error } = await createClient().auth.signInWithOAuth({
-      provider,
+      provider: provider as "google",
       options: {
         redirectTo: callbackUrl,
         skipBrowserRedirect: true,
@@ -199,19 +205,47 @@ function AuthView({ onAuth }: { onAuth: () => void }) {
 
     if (error) {
       setLoading(false)
-      const label = provider === "google" ? "Google" : "GitHub"
+      const label = provider === "google" ? "Google" : provider === "github" ? "GitHub" : "LINE"
       alert(`${label}ログイン失敗: ${toFriendlyAuthErrorMessage(error.message)}`)
       return
     }
 
     if (!data?.url) {
       setLoading(false)
-      const label = provider === "google" ? "Google" : "GitHub"
+      const label = provider === "google" ? "Google" : provider === "github" ? "GitHub" : "LINE"
       alert(`${label}ログインURLの取得に失敗しました`)
       return
     }
 
     window.location.assign(data.url)
+  }
+
+  async function handleLineQrLogin() {
+    setLoading(true)
+    setLineQrUrl(null)
+
+    const callbackUrl = getAuthCallbackUrl()
+    const { data, error } = await createClient().auth.signInWithOAuth({
+      provider: "line" as "google",
+      options: {
+        redirectTo: callbackUrl,
+        skipBrowserRedirect: true,
+      },
+    })
+
+    setLoading(false)
+
+    if (error) {
+      alert("LINE QRログイン失敗: " + toFriendlyAuthErrorMessage(error.message))
+      return
+    }
+
+    if (!data?.url) {
+      alert("LINE QRログインURLの取得に失敗しました")
+      return
+    }
+
+    setLineQrUrl(data.url)
   }
 
   async function handleDemoLogin() {
@@ -443,6 +477,26 @@ function AuthView({ onAuth }: { onAuth: () => void }) {
           {isLogin && (
             <button
               type="button"
+              onClick={handleLineLogin}
+              disabled={loading}
+              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
+            >
+              LINEでログイン
+            </button>
+          )}
+          {isLogin && (
+            <button
+              type="button"
+              onClick={handleLineQrLogin}
+              disabled={loading}
+              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
+            >
+              LINE QRでログイン
+            </button>
+          )}
+          {isLogin && (
+            <button
+              type="button"
               onClick={handleGithubLogin}
               disabled={loading}
               className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
@@ -469,6 +523,26 @@ function AuthView({ onAuth }: { onAuth: () => void }) {
             >
               デモアカウントでログイン
             </button>
+          )}
+          {isLogin && lineQrUrl && (
+            <div className="mt-2 rounded-xl border border-slate-700 bg-slate-900/40 p-3 text-center space-y-2">
+              <p className="text-xs text-slate-300">スマホのLINEでQRを読み取ってログイン</p>
+              <Image
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(lineQrUrl)}`}
+                alt="LINE OAuth QR"
+                width={220}
+                height={220}
+                className="mx-auto rounded-lg"
+                unoptimized
+              />
+              <button
+                type="button"
+                onClick={() => window.location.assign(lineQrUrl)}
+                className="text-xs text-violet-300 underline underline-offset-2"
+              >
+                この端末でLINEログインを続行
+              </button>
+            </div>
           )}
         </div>
       </div>
