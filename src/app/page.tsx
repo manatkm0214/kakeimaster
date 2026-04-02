@@ -161,6 +161,9 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
   const [showLineQr, setShowLineQr] = useState(false)
   const [loginQrImageUrl, setLoginQrImageUrl] = useState<string | null>(null)
   const [showLoginQr, setShowLoginQr] = useState(false)
+  const [phone, setPhone] = useState("")
+  const [smsOtpCode, setSmsOtpCode] = useState("")
+  const [smsOtpRequested, setSmsOtpRequested] = useState(false)
   const lineLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_LINE_LOGIN === "true"
 
   useEffect(() => {
@@ -312,6 +315,67 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     setPostSignupResendEmail(null)
     setEmail("")
     setSignupMessage({ type: "success", text: "別のメールアドレスで新規登録できます。メールアドレスを入力して登録してください。" })
+  }
+
+  function normalizePhone(raw: string): string {
+    const digits = raw.replace(/[^0-9]/g, "")
+    if (digits.startsWith("0")) {
+      return "+81" + digits.slice(1)
+    }
+    if (digits.startsWith("81")) {
+      return "+" + digits
+    }
+    return "+" + digits
+  }
+
+  async function handleSendSmsOtp() {
+    const normalizedPhone = normalizePhone(phone)
+    if (normalizedPhone.length < 10) {
+      setSignupMessage({ type: "error", text: "携帯電話番号を入力してください（例: 09012345678）" })
+      return
+    }
+
+    setLoading(true)
+    const { error } = await createClient().auth.signInWithOtp({ phone: normalizedPhone })
+    setLoading(false)
+
+    if (error) {
+      const msg = error.message.toLowerCase()
+      if (msg.includes("sms") || msg.includes("phone") || msg.includes("provider") || msg.includes("disabled")) {
+        setSignupMessage({ type: "error", text: "SMS認証が無効です。Supabaseダッシュボード → Authentication → Providers → Phone でSMSプロバイダーを設定してください。" })
+      } else {
+        setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(error.message) })
+      }
+      return
+    }
+
+    setSmsOtpRequested(true)
+    setSignupMessage({ type: "success", text: `${normalizedPhone} にSMSでコードを送信しました。届いた6桁コードを入力してください。` })
+  }
+
+  async function handleVerifySmsOtp() {
+    const normalizedPhone = normalizePhone(phone)
+    const token = smsOtpCode.trim()
+
+    if (!token) {
+      setSignupMessage({ type: "error", text: "SMSで届いたコードを入力してください" })
+      return
+    }
+
+    setLoading(true)
+    const { data, error } = await createClient().auth.verifyOtp({
+      phone: normalizedPhone,
+      token,
+      type: "sms",
+    })
+    setLoading(false)
+
+    if (error) {
+      setSignupMessage({ type: "error", text: "SMS認証に失敗しました。コードを確認して再試行してください。" })
+      return
+    }
+
+    await onAuth(data.user ?? data.session?.user ?? null)
   }
 
   function handleShowLoginQr() {
@@ -744,6 +808,50 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
               )}
             </div>
           )}
+          {isLogin && (
+            <div className="space-y-2 rounded-xl border border-slate-700 bg-slate-900/30 p-3">
+              <p className="text-[11px] text-slate-400 font-medium">📱 SMS認証でログイン</p>
+              <div className="flex gap-2">
+                <input
+                  type="tel"
+                  placeholder="携帯番号（09012345678）"
+                  value={phone}
+                  onChange={e => { setPhone(e.target.value); setSmsOtpRequested(false) }}
+                  className="entry-input flex-1 bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendSmsOtp}
+                  disabled={loading || phone.replace(/[^0-9]/g, "").length < 9}
+                  className="px-3 py-2 rounded-xl text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-50 whitespace-nowrap text-white"
+                >
+                  SMS送信
+                </button>
+              </div>
+              {smsOtpRequested && (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="6桁コード"
+                    value={smsOtpCode}
+                    onChange={e => setSmsOtpCode(e.target.value.replace(/\D/g, ""))}
+                    className="entry-input flex-1 bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleVerifySmsOtp}
+                    disabled={loading || smsOtpCode.length < 6}
+                    className="px-3 py-2 rounded-xl text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 whitespace-nowrap text-white"
+                  >
+                    SMS認証
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {isLogin && (
             <div className="space-y-2">
               <button
