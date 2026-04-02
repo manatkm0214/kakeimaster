@@ -68,19 +68,6 @@ function getAuthCallbackUrl(): string {
   return "/auth/callback"
 }
 
-function getPasswordResetUrl(): string {
-  if (typeof window !== "undefined") {
-    return `${window.location.origin}/auth/reset-password`
-  }
-
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  if (siteUrl) {
-    return `${siteUrl.replace(/\/$/, "")}/auth/reset-password`
-  }
-
-  return "/auth/reset-password"
-}
-
 function buildLoginPasswordCandidates(rawPassword: string): string[] {
   const candidates = [
     rawPassword,
@@ -145,155 +132,9 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
-  const [lineQrUrl, setLineQrUrl] = useState<string | null>(null)
 
   async function handlePasswordLogin() {
     await handleSubmit()
-  }
-
-  async function handleForgotPassword() {
-    const normalizedEmail = email.trim().toLowerCase()
-
-    if (!normalizedEmail) {
-      alert("パスワード再設定メール送信のため、メールアドレスを入力してください")
-      return
-    }
-
-    setLoading(true)
-    const callbackUrl = getPasswordResetUrl()
-    const { error } = await createClient().auth.resetPasswordForEmail(normalizedEmail, {
-      redirectTo: callbackUrl,
-    })
-    setLoading(false)
-
-    if (error) {
-      alert("再設定メール送信失敗: " + toFriendlyAuthErrorMessage(error.message))
-      return
-    }
-
-    alert("パスワード再設定メールを送信しました。\nメール内リンクから新しいパスワードを設定できます。\nGmailの受信トレイに無い場合は 迷惑メール と プロモーション を確認し、数分待って再読込してください。")
-  }
-
-  async function handleResendConfirmationEmail() {
-    const normalizedEmail = email.trim().toLowerCase()
-
-    if (!normalizedEmail) {
-      alert("確認メール再送のため、メールアドレスを入力してください")
-      return
-    }
-
-    setLoading(true)
-    const callbackUrl = getAuthCallbackUrl()
-    const { error } = await createClient().auth.resend({
-      type: "signup",
-      email: normalizedEmail,
-      options: {
-        emailRedirectTo: callbackUrl,
-      },
-    })
-    setLoading(false)
-
-    if (error) {
-      alert("確認メール再送失敗: " + toFriendlyAuthErrorMessage(error.message))
-      return
-    }
-
-    alert("確認メールを再送しました。\nGmailの受信トレイに無い場合は 迷惑メール と プロモーション を確認してください。")
-  }
-
-  async function handleMagicLinkLogin() {
-    const normalizedEmail = email.trim().toLowerCase()
-
-    if (!normalizedEmail) {
-      alert("メールリンク送信のため、メールアドレスを入力してください")
-      return
-    }
-
-    setLoading(true)
-    const callbackUrl = getAuthCallbackUrl()
-    const { error } = await createClient().auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        emailRedirectTo: callbackUrl,
-        shouldCreateUser: false,
-      },
-    })
-    setLoading(false)
-
-    if (error) {
-      alert("メールリンク送信失敗: " + toFriendlyAuthErrorMessage(error.message))
-      return
-    }
-
-    alert("ログイン用メールリンクを送信しました。Gmailの受信トレイ/迷惑メール/プロモーションを確認してください。")
-  }
-
-  async function handleGoogleLogin() {
-    await handleOAuthLogin("google")
-  }
-
-  async function handleGithubLogin() {
-    await handleOAuthLogin("github")
-  }
-
-  async function handleLineLogin() {
-    await handleOAuthLogin("line")
-  }
-
-  async function handleOAuthLogin(provider: "google" | "github" | "line") {
-    setLoading(true)
-    const callbackUrl = getAuthCallbackUrl()
-    const { data, error } = await createClient().auth.signInWithOAuth({
-      provider: provider as "google",
-      options: {
-        redirectTo: callbackUrl,
-        skipBrowserRedirect: true,
-      },
-    })
-
-    if (error) {
-      setLoading(false)
-      const label = provider === "google" ? "Google" : provider === "github" ? "GitHub" : "LINE"
-      alert(`${label}ログイン失敗: ${toFriendlyAuthErrorMessage(error.message)}`)
-      return
-    }
-
-    if (!data?.url) {
-      setLoading(false)
-      const label = provider === "google" ? "Google" : provider === "github" ? "GitHub" : "LINE"
-      alert(`${label}ログインURLの取得に失敗しました`)
-      return
-    }
-
-    window.location.assign(data.url)
-  }
-
-  async function handleLineQrLogin() {
-    setLoading(true)
-    setLineQrUrl(null)
-
-    const callbackUrl = getAuthCallbackUrl()
-    const { data, error } = await createClient().auth.signInWithOAuth({
-      provider: "line" as "google",
-      options: {
-        redirectTo: callbackUrl,
-        skipBrowserRedirect: true,
-      },
-    })
-
-    setLoading(false)
-
-    if (error) {
-      alert("LINE QRログイン失敗: " + toFriendlyAuthErrorMessage(error.message))
-      return
-    }
-
-    if (!data?.url) {
-      alert("LINE QRログインURLの取得に失敗しました")
-      return
-    }
-
-    setLineQrUrl(data.url)
   }
 
   async function handleDemoLogin() {
@@ -314,24 +155,6 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
 
     if (error) {
       alert("デモログイン失敗: " + toFriendlyAuthErrorMessage(error.message))
-      return
-    }
-
-    onAuth()
-  }
-
-  async function handleGuestLogin() {
-    setLoading(true)
-    const { error } = await createClient().auth.signInAnonymously()
-    setLoading(false)
-
-    if (error) {
-      const raw = error.message.toLowerCase()
-      if (raw.includes("anonymous") && raw.includes("disabled")) {
-        alert("ゲストログインが無効です。SupabaseのAuthentication > ProvidersでAnonymousを有効にしてください。")
-        return
-      }
-      alert("ゲストログイン失敗: " + toFriendlyAuthErrorMessage(error.message))
       return
     }
 
@@ -374,16 +197,6 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
       if (loginError) {
         const friendly = toFriendlyAuthErrorMessage(loginError)
         alert("ログイン失敗: " + friendly)
-        if (friendly.includes("メールアドレスまたはパスワードが間違っています")) {
-          if (window.confirm("パスワード認証で入れないため、メールリンクでログインしますか？")) {
-            await handleMagicLinkLogin()
-          }
-        }
-        if (friendly.includes("メール認証が完了していません")) {
-          if (window.confirm("確認メールを再送しますか？")) {
-            await handleResendConfirmationEmail()
-          }
-        }
         return 
       }
       onAuth()
@@ -545,112 +358,12 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
           {isLogin && (
             <button
               type="button"
-              onClick={handleForgotPassword}
-              disabled={loading}
-              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
-            >
-              パスワードを忘れた場合
-            </button>
-          )}
-          {isLogin && (
-            <button
-              type="button"
-              onClick={handleResendConfirmationEmail}
-              disabled={loading}
-              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
-            >
-              確認メールを再送
-            </button>
-          )}
-          {isLogin && (
-            <button
-              type="button"
-              onClick={handleMagicLinkLogin}
-              disabled={loading}
-              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
-            >
-              メールリンクでログイン
-            </button>
-          )}
-          {isLogin && (
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
-            >
-              Googleでログイン
-            </button>
-          )}
-          {isLogin && (
-            <button
-              type="button"
-              onClick={handleLineLogin}
-              disabled={loading}
-              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
-            >
-              LINEでログイン
-            </button>
-          )}
-          {isLogin && (
-            <button
-              type="button"
-              onClick={handleLineQrLogin}
-              disabled={loading}
-              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
-            >
-              LINE QRでログイン
-            </button>
-          )}
-          {isLogin && (
-            <button
-              type="button"
-              onClick={handleGithubLogin}
-              disabled={loading}
-              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
-            >
-              GitHubでログイン
-            </button>
-          )}
-          {isLogin && (
-            <button
-              type="button"
-              onClick={handleGuestLogin}
-              disabled={loading}
-              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
-            >
-              ゲストでお試しログイン
-            </button>
-          )}
-          {isLogin && (
-            <button
-              type="button"
               onClick={handleDemoLogin}
               disabled={loading}
               className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
             >
               デモアカウントでログイン
             </button>
-          )}
-          {isLogin && lineQrUrl && (
-            <div className="mt-2 rounded-xl border border-slate-700 bg-slate-900/40 p-3 text-center space-y-2">
-              <p className="text-xs text-slate-300">スマホのLINEでQRを読み取ってログイン</p>
-              <Image
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(lineQrUrl)}`}
-                alt="LINE OAuth QR"
-                width={220}
-                height={220}
-                className="mx-auto rounded-lg"
-                unoptimized
-              />
-              <button
-                type="button"
-                onClick={() => window.location.assign(lineQrUrl)}
-                className="text-xs text-violet-300 underline underline-offset-2"
-              >
-                この端末でLINEログインを続行
-              </button>
-            </div>
           )}
         </div>
 
