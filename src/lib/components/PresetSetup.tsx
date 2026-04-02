@@ -339,6 +339,15 @@ export default function PresetSetup({ onComplete, initialProfile = null, onCance
             3問で最適モードを自動選択
           </button>
 
+          <div className="rounded-lg border border-slate-700 bg-slate-950/40 p-3 text-[11px] text-slate-300 space-y-1">
+            <p className="font-semibold text-slate-200">点数基準（凡例）</p>
+            <p>月次収支: 黒字 0点 / トントン 1点 / 赤字 2点</p>
+            <p>防衛資金: 3か月以上 0点 / 1〜3か月 1点 / 1か月未満 2点</p>
+            <p>物価高負担: 低い 0点 / やや高い 1点 / 高い 2点</p>
+            <p>合計 0〜2点: 経済標準 / 3〜4点: 物価高対策 / 5〜6点: 赤字改善</p>
+            <p>補足: 月次収支が赤字なら、合計点に関係なく赤字改善を優先します。</p>
+          </div>
+
           {diagnosisDetail && (
             <div className="rounded-lg border border-blue-700/50 bg-blue-900/20 p-3 text-xs text-blue-100 space-y-1">
               <p className="font-semibold">診断根拠（スコア内訳）</p>
