@@ -57,6 +57,15 @@ function toFriendlyAuthErrorMessage(raw: string): string {
 
 function getAuthCallbackUrl(): string {
   if (typeof window !== "undefined") {
+    const host = window.location.hostname
+    const isLocalHost = host === "localhost" || host === "127.0.0.1"
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+
+    // Keep localhost callback stable even if dev server auto-switches to :3001.
+    if (isLocalHost && siteUrl) {
+      return `${siteUrl.replace(/\/$/, "")}/auth/callback`
+    }
+
     return `${window.location.origin}/auth/callback`
   }
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
@@ -441,6 +450,17 @@ export default function Home() {
   // 認証チェック
   useEffect(() => {
     const supabase = createClient()
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      const authError = params.get("auth_error")
+      if (authError) {
+        alert(decodeURIComponent(authError))
+        const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`
+        window.history.replaceState({}, "", cleanUrl)
+      }
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setAuthLoading(false)
