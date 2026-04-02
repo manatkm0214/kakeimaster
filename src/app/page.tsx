@@ -51,7 +51,7 @@ function toFriendlyAuthErrorMessage(raw: string): string {
     return "このログイン方式は現在無効です。管理者に有効化を依頼してください"
   }
   if (message.includes("provider line could not be found") || message.includes("unsupported provider") && message.includes("line")) {
-    return "この環境ではLINEログインが未対応です。メールリンクまたはワンタイムコードでログインしてください"
+    return "この環境ではLINEログインが未対応です。メールリンクまたはPINコードでログインしてください"
   }
   if (message.includes("redirect_to is not allowed") || message.includes("redirect url") || message.includes("redirect_uri_mismatch")) {
     return "認証リダイレクトURL設定が一致していません。管理者に設定確認を依頼してください"
@@ -161,9 +161,6 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
   const [showLineQr, setShowLineQr] = useState(false)
   const [loginQrImageUrl, setLoginQrImageUrl] = useState<string | null>(null)
   const [showLoginQr, setShowLoginQr] = useState(false)
-  const [phone, setPhone] = useState("")
-  const [smsOtpCode, setSmsOtpCode] = useState("")
-  const [smsOtpRequested, setSmsOtpRequested] = useState(false)
   const lineLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_LINE_LOGIN === "true"
 
   useEffect(() => {
@@ -317,67 +314,6 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     setSignupMessage({ type: "success", text: "別のメールアドレスで新規登録できます。メールアドレスを入力して登録してください。" })
   }
 
-  function normalizePhone(raw: string): string {
-    const digits = raw.replace(/[^0-9]/g, "")
-    if (digits.startsWith("0")) {
-      return "+81" + digits.slice(1)
-    }
-    if (digits.startsWith("81")) {
-      return "+" + digits
-    }
-    return "+" + digits
-  }
-
-  async function handleSendSmsOtp() {
-    const normalizedPhone = normalizePhone(phone)
-    if (normalizedPhone.length < 10) {
-      setSignupMessage({ type: "error", text: "携帯電話番号を入力してください（例: 09012345678）" })
-      return
-    }
-
-    setLoading(true)
-    const { error } = await createClient().auth.signInWithOtp({ phone: normalizedPhone })
-    setLoading(false)
-
-    if (error) {
-      const msg = error.message.toLowerCase()
-      if (msg.includes("sms") || msg.includes("phone") || msg.includes("provider") || msg.includes("disabled")) {
-        setSignupMessage({ type: "error", text: "SMS認証が無効です。Supabaseダッシュボード → Authentication → Providers → Phone でSMSプロバイダーを設定してください。" })
-      } else {
-        setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(error.message) })
-      }
-      return
-    }
-
-    setSmsOtpRequested(true)
-    setSignupMessage({ type: "success", text: `${normalizedPhone} にSMSでコードを送信しました。届いた6桁コードを入力してください。` })
-  }
-
-  async function handleVerifySmsOtp() {
-    const normalizedPhone = normalizePhone(phone)
-    const token = smsOtpCode.trim()
-
-    if (!token) {
-      setSignupMessage({ type: "error", text: "SMSで届いたコードを入力してください" })
-      return
-    }
-
-    setLoading(true)
-    const { data, error } = await createClient().auth.verifyOtp({
-      phone: normalizedPhone,
-      token,
-      type: "sms",
-    })
-    setLoading(false)
-
-    if (error) {
-      setSignupMessage({ type: "error", text: "SMS認証に失敗しました。コードを確認して再試行してください。" })
-      return
-    }
-
-    await onAuth(data.user ?? data.session?.user ?? null)
-  }
-
   function handleShowLoginQr() {
     const normalizedEmail = email.trim().toLowerCase()
     if (!normalizedEmail) {
@@ -390,14 +326,14 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&ecc=M&data=${encodeURIComponent(loginUrl)}`
     setLoginQrImageUrl(qrUrl)
     setShowLoginQr(true)
-    setSignupMessage({ type: "success", text: "スマホのカメラでQRを読み取るとこのアプリが開き、メールアドレスが自動入力されます。そのままワンタイムコードでログインできます。" })
+    setSignupMessage({ type: "success", text: "スマホのカメラでQRを読み取るとこのアプリが開き、メールアドレスが自動入力されます。そのままPINコードでログインできます。" })
   }
 
   async function handleSendOtpCode() {
     const normalizedEmail = email.trim().toLowerCase()
 
     if (!normalizedEmail) {
-      setSignupMessage({ type: "error", text: "メールアドレスを入力してからワンタイムコード送信を押してください" })
+      setSignupMessage({ type: "error", text: "メールアドレスを入力してからPINコード送信を押してください" })
       return
     }
 
@@ -416,7 +352,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     }
 
     setOtpRequested(true)
-    setSignupMessage({ type: "success", text: `${normalizedEmail} にワンタイムコードを送信しました。メールの6桁コードを入力してログインしてください。` })
+    setSignupMessage({ type: "success", text: `${normalizedEmail} にPINコードを送信しました。メールの6桁PINを入力してログインしてください。` })
   }
 
   async function handleOtpVerify() {
@@ -428,7 +364,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
       return
     }
     if (!token) {
-      setSignupMessage({ type: "error", text: "ワンタイムコードを入力してください" })
+      setSignupMessage({ type: "error", text: "PINコードを入力してください" })
       return
     }
 
@@ -441,7 +377,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     setLoading(false)
 
     if (error) {
-      setSignupMessage({ type: "error", text: "ワンタイムコード認証に失敗しました。最新のコードを確認してください。" })
+      setSignupMessage({ type: "error", text: "PINコード認証に失敗しました。最新のPINを確認してください。" })
       return
     }
 
@@ -450,7 +386,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
 
   async function handleLineLogin() {
     if (!lineLoginEnabled) {
-      setSignupMessage({ type: "error", text: "この環境ではLINEログインが未対応です。メールリンクまたはワンタイムコードをご利用ください。" })
+      setSignupMessage({ type: "error", text: "この環境ではLINEログインが未対応です。メールリンクまたはPINコードをご利用ください。" })
       return
     }
 
@@ -743,7 +679,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
             {loading ? "処理中..." : isLogin ? "パスワードでログイン" : "登録する"}
           </button>
           {isLogin && (
-            <p className="text-[11px] text-slate-400">ログイン方法: パスワード / メールリンク / ワンタイムコード / LINE</p>
+            <p className="text-[11px] text-slate-400">ログイン方法: パスワード / メールリンク / PINコード / LINE</p>
           )}
           {isLogin && (
             <div className="flex justify-between text-xs text-slate-400 pt-1">
@@ -783,15 +719,14 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
                 disabled={loading}
                 className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
               >
-                ワンタイムコードをメールで受け取る
+                PINコードをメールで受け取る
               </button>
               {otpRequested && (
                 <div className="flex gap-2">
                   <input
                     type="text"
                     inputMode="numeric"
-                    maxLength={6}
-                    placeholder="6桁コード"
+                    placeholder="6桁PIN"
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                     className="entry-input flex-1 bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400"
@@ -802,50 +737,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
                     disabled={loading || otpCode.length < 6}
                     className="px-3 py-2 rounded-xl text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-50"
                   >
-                    コード認証
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          {isLogin && (
-            <div className="space-y-2 rounded-xl border border-slate-700 bg-slate-900/30 p-3">
-              <p className="text-[11px] text-slate-400 font-medium">📱 SMS認証でログイン</p>
-              <div className="flex gap-2">
-                <input
-                  type="tel"
-                  placeholder="携帯番号（09012345678）"
-                  value={phone}
-                  onChange={e => { setPhone(e.target.value); setSmsOtpRequested(false) }}
-                  className="entry-input flex-1 bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400"
-                />
-                <button
-                  type="button"
-                  onClick={handleSendSmsOtp}
-                  disabled={loading || phone.replace(/[^0-9]/g, "").length < 9}
-                  className="px-3 py-2 rounded-xl text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-50 whitespace-nowrap text-white"
-                >
-                  SMS送信
-                </button>
-              </div>
-              {smsOtpRequested && (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="6桁コード"
-                    value={smsOtpCode}
-                    onChange={e => setSmsOtpCode(e.target.value.replace(/\D/g, ""))}
-                    className="entry-input flex-1 bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleVerifySmsOtp}
-                    disabled={loading || smsOtpCode.length < 6}
-                    className="px-3 py-2 rounded-xl text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 whitespace-nowrap text-white"
-                  >
-                    SMS認証
+                    PIN認証
                   </button>
                 </div>
               )}
@@ -872,7 +764,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
                     unoptimized
                     className="mx-auto w-44 h-44 rounded-lg bg-white p-2"
                   />
-                  <p className="text-[10px] text-slate-400 text-center">読み取り後、アプリ上でワンタイムコードでログインできます</p>
+                  <p className="text-[10px] text-slate-400 text-center">読み取り後、アプリ上でPINコード認証でログインできます</p>
                   <button
                     type="button"
                     onClick={() => { setShowLoginQr(false); setLoginQrImageUrl(null) }}
@@ -1113,7 +1005,7 @@ export default function Home() {
         setShowAuthView(true)
         if (pendingLineEmail) {
           setAuthPrefillEmail(pendingLineEmail)
-          setAuthNotice({ type: "success", text: "LINE本人確認が完了しました。メールのワンタイムコード認証でログインを完了してください。" })
+          setAuthNotice({ type: "success", text: "LINE本人確認が完了しました。メールのPINコード認証でログインを完了してください。" })
         } else {
           setAuthNotice({ type: "error", text: "LINE認証は完了しましたが、メール情報を取得できませんでした。メールログインをご利用ください。" })
         }
