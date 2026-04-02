@@ -144,7 +144,7 @@ function WelcomeView({ onStartAuth }: { onStartAuth: () => void }) {
   )
 }
 
-function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void }) {
+function AuthView({ onAuth, onBack }: { onAuth: (nextUser?: User | null) => Promise<void> | void; onBack?: () => void }) {
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -261,7 +261,7 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
     }
 
     setLoading(true)
-    const { error } = await createClient().auth.signInWithPassword({
+    const { data, error } = await createClient().auth.signInWithPassword({
       email: demoEmail,
       password: demoPassword,
     })
@@ -272,12 +272,14 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
       return
     }
 
-    onAuth()
+    await onAuth(data.session?.user ?? data.user ?? null)
   }
 
   async function handleSubmit() {
     const normalizedEmail = email.trim().toLowerCase()
     const supabase = createClient()
+
+    setSignupMessage(null)
 
     if (!normalizedEmail || !password) { setSignupMessage({ type: "error", text: "メールアドレスとパスワードを入力してください" }); return }
     if (!isLogin && !isPasswordValid(password)) {
@@ -288,16 +290,18 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
     
     if (isLogin) {
       let loginError: string | null = null
+      let signedInUser: User | null = null
       const passwordCandidates = buildLoginPasswordCandidates(password)
 
       for (const candidate of passwordCandidates) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
           password: candidate,
         })
 
         if (!error) {
           loginError = null
+          signedInUser = data.session?.user ?? data.user ?? null
           break
         }
 
@@ -319,7 +323,7 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
         }
         return 
       }
-      onAuth()
+      await onAuth(signedInUser)
     } else {
       const { data: signUpData, error } = await supabase.auth.signUp({
         email: normalizedEmail,
@@ -341,7 +345,7 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
       }
       // メール確認不要の場合はセッションが即座に発行される
       if (signUpData.session) {
-        onAuth()
+        await onAuth(signUpData.session.user)
         return
       }
       // メール確認が必要な場合 → ログインタブに切り替え・メールアドレスを保持
@@ -516,6 +520,16 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
           {isLogin && (
             <button
               type="button"
+              onClick={handleMagicLinkLogin}
+              disabled={loading}
+              className="w-full py-2 text-xs text-slate-400 hover:text-white underline underline-offset-2 disabled:opacity-50"
+            >
+              メールリンクでログイン
+            </button>
+          )}
+          {isLogin && (
+            <button
+              type="button"
               onClick={handleLineLogin}
               disabled={loading}
               className="w-full py-2.5 flex items-center justify-center gap-2 bg-[#06C755] hover:bg-[#05b34c] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold transition-all text-white text-sm"
@@ -574,6 +588,18 @@ export default function Home() {
   const [dataLoading, setDataLoading] = useState(false)
   const [needsSetup, setNeedsSetup] = useState(false)
   const [showAuthView, setShowAuthView] = useState(false)
+
+  const syncSessionToHome = useCallback(async (nextUser?: User | null) => {
+    if (nextUser) {
+      setUser(nextUser)
+      setShowAuthView(false)
+      return
+    }
+
+    const { data: { session } } = await createClient().auth.getSession()
+    setUser(session?.user ?? null)
+    setShowAuthView(false)
+  }, [])
 
   // 月切替
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -642,10 +668,16 @@ export default function Home() {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
+      if (session?.user) {
+        setShowAuthView(false)
+      }
       setAuthLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      if (session?.user) {
+        setShowAuthView(false)
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -738,7 +770,7 @@ export default function Home() {
     if (!showAuthView) {
       return <WelcomeView onStartAuth={() => setShowAuthView(true)} />
     }
-    return <AuthView onAuth={() => { /* useEffect が自動検知 */ }} onBack={() => setShowAuthView(false)} />
+    return <AuthView onAuth={syncSessionToHome} onBack={() => setShowAuthView(false)} />
   }
 
   if (needsSetup) {
