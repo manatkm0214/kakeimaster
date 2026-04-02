@@ -153,6 +153,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [signupMessage, setSignupMessage] = useState<{ type: "success" | "error"; text: string } | null>(initialMessage ?? null)
+  const [postSignupResendEmail, setPostSignupResendEmail] = useState<string | null>(null)
   const [otpCode, setOtpCode] = useState("")
   const [otpRequested, setOtpRequested] = useState(false)
   const [lineAuthUrl, setLineAuthUrl] = useState<string | null>(null)
@@ -265,6 +266,31 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     }
 
     setSignupMessage({ type: "success", text: `${normalizedEmail} にログイン用リンクを送信しました。受信メールをご確認ください。` })
+  }
+
+  async function handlePostSignupResend() {
+    if (!postSignupResendEmail) {
+      setSignupMessage({ type: "error", text: "再送先メールアドレスが見つかりません。メールアドレスを入力して確認メール再送を押してください" })
+      return
+    }
+
+    setLoading(true)
+    const callbackUrl = getAuthCallbackUrl()
+    const { error } = await createClient().auth.resend({
+      type: "signup",
+      email: postSignupResendEmail,
+      options: {
+        emailRedirectTo: callbackUrl,
+      },
+    })
+    setLoading(false)
+
+    if (error) {
+      setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(error.message) })
+      return
+    }
+
+    setSignupMessage({ type: "success", text: `${postSignupResendEmail} に確認メールを再送しました。届かない場合は迷惑メールフォルダも確認してください。` })
   }
 
   async function handleSendOtpCode() {
@@ -410,6 +436,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
         return 
       }
       await onAuth(signedInUser)
+      setPostSignupResendEmail(null)
     } else {
       const { data: signUpData, error } = await supabase.auth.signUp({
         email: normalizedEmail,
@@ -420,6 +447,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
       })
       setLoading(false)
       if (error) {
+        setPostSignupResendEmail(null)
         let message = error.message || "不明なエラーが発生しました"
         if (message.includes("Invalid API key") || message.includes("invalid_api_key")) message = "Supabaseの設定に問題があります。管理者にお問い合わせください。"
         if (message.includes("already registered") || message.includes("already exists")) message = "このメールアドレスは既に登録されています"
@@ -431,11 +459,13 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
       }
       // メール確認不要の場合はセッションが即座に発行される
       if (signUpData.session) {
+        setPostSignupResendEmail(null)
         await onAuth(signUpData.session.user)
         return
       }
       // メール確認が必要な場合 → ログインタブに切り替え・メールアドレスを保持
       setIsLogin(true)
+      setPostSignupResendEmail(normalizedEmail)
       // パスワードはクリアしない → ログインボタンをすぐ押せる
       setSignupMessage({
         type: "success",
@@ -536,6 +566,17 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
             }`}>
               {signupMessage.text}
             </div>
+          )}
+
+          {isLogin && postSignupResendEmail && (
+            <button
+              type="button"
+              onClick={handlePostSignupResend}
+              disabled={loading}
+              className="w-full py-2 text-xs text-emerald-200 bg-emerald-900/40 border border-emerald-700/60 hover:bg-emerald-900/60 rounded-xl disabled:opacity-50"
+            >
+              確認メールをもう一度送る（ワンクリック）
+            </button>
           )}
 
           <input
