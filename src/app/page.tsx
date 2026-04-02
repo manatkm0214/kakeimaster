@@ -293,6 +293,25 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     setSignupMessage({ type: "success", text: `${postSignupResendEmail} に確認メールを再送しました。届かない場合は迷惑メールフォルダも確認してください。` })
   }
 
+  function handleSpamFolderHelp() {
+    if (!postSignupResendEmail) {
+      setSignupMessage({ type: "error", text: "メールアドレスを入力してから確認メール再送をお試しください。" })
+      return
+    }
+
+    setSignupMessage({
+      type: "success",
+      text: `${postSignupResendEmail} 宛メールについて、迷惑メール・プロモーション・受信拒否設定を確認してください。見つからない場合は下の「別メールで再登録」をお試しください。`,
+    })
+  }
+
+  function handleRetryWithAnotherEmail() {
+    setIsLogin(false)
+    setPostSignupResendEmail(null)
+    setEmail("")
+    setSignupMessage({ type: "success", text: "別のメールアドレスで新規登録できます。メールアドレスを入力して登録してください。" })
+  }
+
   async function handleSendOtpCode() {
     const normalizedEmail = email.trim().toLowerCase()
 
@@ -569,14 +588,32 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
           )}
 
           {isLogin && postSignupResendEmail && (
-            <button
-              type="button"
-              onClick={handlePostSignupResend}
-              disabled={loading}
-              className="w-full py-2 text-xs text-emerald-200 bg-emerald-900/40 border border-emerald-700/60 hover:bg-emerald-900/60 rounded-xl disabled:opacity-50"
-            >
-              確認メールをもう一度送る（ワンクリック）
-            </button>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handlePostSignupResend}
+                disabled={loading}
+                className="w-full py-2 text-xs text-emerald-200 bg-emerald-900/40 border border-emerald-700/60 hover:bg-emerald-900/60 rounded-xl disabled:opacity-50"
+              >
+                確認メールをもう一度送る（ワンクリック）
+              </button>
+              <div className="flex items-center justify-between text-[11px] text-slate-300 px-1">
+                <button
+                  type="button"
+                  onClick={handleSpamFolderHelp}
+                  className="underline underline-offset-2 hover:text-white"
+                >
+                  迷惑メールフォルダを確認
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRetryWithAnotherEmail}
+                  className="underline underline-offset-2 hover:text-white"
+                >
+                  別メールで再登録
+                </button>
+              </div>
+            </div>
           )}
 
           <input
