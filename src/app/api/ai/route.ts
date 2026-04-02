@@ -22,14 +22,24 @@ export async function POST(req: NextRequest) {
 - 投資合計: ${data.investment}円
 - 貯蓄率: ${data.savingRate}%
 - 固定費率: ${data.fixedRate}%
+- 手取り(基準): ${data.takeHome ?? data.income}円
+- 目標配分: 固定費${data.allocationTargets?.fixed ?? "-"}%以下 / 変動費${data.allocationTargets?.variable ?? "-"}%以下 / 貯蓄${data.allocationTargets?.savings ?? "-"}%以上
+- 実績配分: 固定費${data.allocationActual?.fixed ?? "-"}% / 変動費${data.allocationActual?.variable ?? "-"}% / 貯蓄${data.allocationActual?.savings ?? "-"}%
+- 月末予測: ${JSON.stringify(data.forecast ?? {})}
+- 予算進捗: ${JSON.stringify(data.budgetProgress ?? [])}
 - カテゴリ別支出: ${JSON.stringify(data.categoryExpenses)}
 
 以下の形式でJSON回答してください（マークダウン記法なし）:
 {
-  "summary": "今月の総評（2-3文）",
+  "summary": "今月の総評（2-3文、初心者にもわかる言葉）",
   "positives": ["良い点1", "良い点2"],
   "warnings": ["注意点1", "注意点2"],
-  "actions": ["来月のアクション1", "来月のアクション2", "来月のアクション3"]
+  "actions": ["来月のアクション1", "来月のアクション2", "来月のアクション3"],
+  "actions_detailed": [
+    {"title":"実行アクション", "expected_impact_yen": 3000, "priority":"high"},
+    {"title":"実行アクション", "expected_impact_yen": 1500, "priority":"medium"},
+    {"title":"実行アクション", "expected_impact_yen": 800, "priority":"low"}
+  ]
 }`
   } else if (type === "savings_plan") {
     prompt = `家計改善プランナーです。

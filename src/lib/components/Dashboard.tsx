@@ -1,12 +1,13 @@
 "use client"
 
-import { Transaction, Budget, formatCurrency } from "@/lib/utils"
+import { Transaction, Budget, Profile, formatCurrency } from "@/lib/utils"
 import { useMemo } from "react"
 
 interface Props {
   transactions: Transaction[]
   budgets: Budget[]
   currentMonth: string
+  profile: Profile | null
 }
 
 function safeLevel(savingRate: number): { level: string; color: string; bar: number } {
@@ -17,7 +18,7 @@ function safeLevel(savingRate: number): { level: string; color: string; bar: num
   return { level: "D", color: "text-red-400", bar: 20 }
 }
 
-export default function Dashboard({ transactions, budgets, currentMonth }: Props) {
+export default function Dashboard({ transactions, budgets, currentMonth, profile }: Props) {
   const stats = useMemo(() => {
     const monthly = transactions.filter(t => t.date.startsWith(currentMonth))
     const income = monthly.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0)
@@ -38,13 +39,33 @@ export default function Dashboard({ transactions, budgets, currentMonth }: Props
     })
 
     // 予算進捗
-    const budgetProgress = budgets.map(b => {
-      const spent = monthly.filter(t => t.category === b.category).reduce((s, t) => s + t.amount, 0)
+    const budgetProgress = budgets.filter(b => b.month === currentMonth).map(b => {
+      const spent = monthly.filter(t => t.type === "expense" && t.category === b.category).reduce((s, t) => s + t.amount, 0)
       return { ...b, spent, pct: Math.round((spent / b.amount) * 100) }
     })
 
     return { income, expense, saving, investment, balance, savingRate, fixedRate, wasteRate, defenseFund, fixed, categoryMap, budgetProgress }
   }, [transactions, budgets, currentMonth])
+
+  const allocation = useMemo(() => {
+    const takeHome = profile?.allocation_take_home && profile.allocation_take_home > 0
+      ? profile.allocation_take_home
+      : stats.income
+    const targetFixed = profile?.allocation_target_fixed_rate ?? 35
+    const targetVariable = profile?.allocation_target_variable_rate ?? 25
+    const targetSavings = profile?.allocation_target_savings_rate ?? 20
+
+    const actualFixed = takeHome > 0 ? Math.round((stats.fixed / takeHome) * 100) : 0
+    const actualVariable = takeHome > 0 ? Math.round(((stats.expense - stats.fixed) / takeHome) * 100) : 0
+    const actualSavings = takeHome > 0 ? Math.round(((stats.saving + stats.investment) / takeHome) * 100) : 0
+
+    return {
+      takeHome,
+      fixed: { actual: actualFixed, target: targetFixed, ok: actualFixed <= targetFixed },
+      variable: { actual: actualVariable, target: targetVariable, ok: actualVariable <= targetVariable },
+      savings: { actual: actualSavings, target: targetSavings, ok: actualSavings >= targetSavings },
+    }
+  }, [profile, stats.expense, stats.fixed, stats.income, stats.investment, stats.saving])
 
   const { level, color, bar } = safeLevel(stats.savingRate)
 
@@ -82,6 +103,28 @@ export default function Dashboard({ transactions, budgets, currentMonth }: Props
           />
         </div>
         <p className="text-xs text-slate-500 mt-1">貯蓄率 {stats.savingRate}% 目標: 20%以上</p>
+      </div>
+
+      {/* 目標達成ミニカード */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-300">🎯 目標達成状況（手取り基準）</h3>
+          <span className="text-xs text-slate-500">手取り: {formatCurrency(allocation.takeHome)}</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+          {[
+            { label: "固定費", data: allocation.fixed },
+            { label: "変動費", data: allocation.variable },
+            { label: "貯蓄+投資", data: allocation.savings },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl border border-slate-700 bg-slate-900/40 p-3">
+              <p className="text-slate-400 mb-1">{item.label}</p>
+              <p className={item.data.ok ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
+                実績 {item.data.actual}% / 目標 {item.data.target}%
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* 詳細指標 */}

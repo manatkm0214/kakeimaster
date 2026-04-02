@@ -30,6 +30,10 @@ export interface Profile {
   id: string
   display_name: string | null
   currency: string
+  allocation_take_home?: number | null
+  allocation_target_fixed_rate?: number | null
+  allocation_target_variable_rate?: number | null
+  allocation_target_savings_rate?: number | null
   created_at: string
 }
 

@@ -599,7 +599,7 @@ export default function Home() {
         ) : (
           <>
             {navPage === "dashboard" && (
-              <Dashboard transactions={transactions} budgets={budgets} currentMonth={currentMonth} />
+              <Dashboard transactions={transactions} budgets={budgets} currentMonth={currentMonth} profile={profile} />
             )}
             {navPage === "input" && (
               <div className="space-y-4">
@@ -640,7 +640,18 @@ export default function Home() {
               <Charts transactions={transactions} currentMonth={currentMonth} />
             )}
             {navPage === "ai" && (
-              <AIAnalysis transactions={transactions} currentMonth={currentMonth} />
+              <AIAnalysis
+                transactions={transactions}
+                budgets={budgets}
+                currentMonth={currentMonth}
+                profile={profile}
+                onProfileUpdate={(next) => {
+                  setProfile((prev) => {
+                    if (!prev) return prev
+                    return { ...prev, ...next }
+                  })
+                }}
+              />
             )}
             {navPage === "report" && (
               <AnnualReport transactions={transactions} currentMonth={currentMonth} />

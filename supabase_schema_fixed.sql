@@ -3,8 +3,17 @@ create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
   currency text default 'JPY',
+  allocation_take_home integer,
+  allocation_target_fixed_rate integer,
+  allocation_target_variable_rate integer,
+  allocation_target_savings_rate integer,
   created_at timestamptz default now()
 );
+
+alter table profiles add column if not exists allocation_take_home integer;
+alter table profiles add column if not exists allocation_target_fixed_rate integer;
+alter table profiles add column if not exists allocation_target_variable_rate integer;
+alter table profiles add column if not exists allocation_target_savings_rate integer;
 
 -- transactions テーブル
 create table if not exists transactions (
