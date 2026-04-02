@@ -6,15 +6,28 @@ import type { Profile } from "@/lib/utils"
 
 interface Props {
   onComplete: (profile: Profile) => void
+  initialProfile?: Profile | null
+  onCancel?: () => void
+  mode?: "create" | "edit"
 }
 
-export default function PresetSetup({ onComplete }: Props) {
-  const [displayName, setDisplayName] = useState("")
-  const [takeHome, setTakeHome] = useState("")
-  const [fixedRate, setFixedRate] = useState("35")
-  const [variableRate, setVariableRate] = useState("25")
-  const [savingsRate, setSavingsRate] = useState("20")
-  const [monthlySavingsGoal, setMonthlySavingsGoal] = useState("")
+export default function PresetSetup({ onComplete, initialProfile = null, onCancel, mode = "create" }: Props) {
+  const [displayName, setDisplayName] = useState(initialProfile?.display_name ?? "")
+  const [takeHome, setTakeHome] = useState(() => {
+    if (typeof initialProfile?.allocation_take_home === "number" && initialProfile.allocation_take_home > 0) {
+      return String(initialProfile.allocation_take_home)
+    }
+    return ""
+  })
+  const [fixedRate, setFixedRate] = useState(String(initialProfile?.allocation_target_fixed_rate ?? 35))
+  const [variableRate, setVariableRate] = useState(String(initialProfile?.allocation_target_variable_rate ?? 25))
+  const [savingsRate, setSavingsRate] = useState(String(initialProfile?.allocation_target_savings_rate ?? 20))
+  const [monthlySavingsGoal, setMonthlySavingsGoal] = useState(() => {
+    if (typeof window === "undefined") return ""
+    const raw = window.localStorage.getItem("kakeibo-savings-goal")
+    const parsed = Number(raw || 0)
+    return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : ""
+  })
   const [categoryAllocation, setCategoryAllocation] = useState<Record<string, string>>({
     "住居": "35",
     "食費": "20",
@@ -156,7 +169,18 @@ export default function PresetSetup({ onComplete }: Props) {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-4">
-        <h2 className="text-xl font-bold text-white">はじめに設定</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white">{mode === "edit" ? "初期設定を変更" : "はじめに設定"}</h2>
+          {mode === "edit" && onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-xs text-slate-300 hover:text-white underline underline-offset-2"
+            >
+              閉じる
+            </button>
+          )}
+        </div>
         <p className="text-sm text-slate-400">表示名と手取りの目標配分を決めると、ダッシュボードにすぐ反映されます。</p>
 
         {message && (
@@ -276,7 +300,7 @@ export default function PresetSetup({ onComplete }: Props) {
           disabled={loading || rateTotal > 100 || categoryTotal !== 100}
           className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-xl font-bold"
         >
-          {loading ? "作成中..." : "開始する"}
+          {loading ? "保存中..." : mode === "edit" ? "変更を保存" : "開始する"}
         </button>
       </div>
     </div>

@@ -596,6 +596,7 @@ export default function Home() {
   const [dataLoading, setDataLoading] = useState(false)
   const [needsSetup, setNeedsSetup] = useState(false)
   const [showAuthView, setShowAuthView] = useState(false)
+  const [showProfileSettings, setShowProfileSettings] = useState(false)
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") return "dark"
     const saved = window.localStorage.getItem("kakeibo-theme")
@@ -837,11 +838,34 @@ export default function Home() {
         >
           {theme === "dark" ? "ライト" : "ダーク"}
         </button>
-        <PresetSetup onComplete={(nextProfile) => {
+        <PresetSetup mode="create" onComplete={(nextProfile) => {
           setProfile(nextProfile)
           setNeedsSetup(false)
           setShowAuthView(false)
         }} />
+      </>
+    )
+  }
+
+  if (showProfileSettings) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="fixed top-3 right-3 z-50 text-xs px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200"
+        >
+          {theme === "dark" ? "ライト" : "ダーク"}
+        </button>
+        <PresetSetup
+          mode="edit"
+          initialProfile={profile}
+          onCancel={() => setShowProfileSettings(false)}
+          onComplete={(nextProfile) => {
+            setProfile(nextProfile)
+            setShowProfileSettings(false)
+          }}
+        />
       </>
     )
   }
@@ -895,6 +919,7 @@ export default function Home() {
               </>
             )}
             <button onClick={handlePasswordChange} className="text-xs px-2 py-1.5 bg-slate-800 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">PW変更</button>
+            <button onClick={() => setShowProfileSettings(true)} className="text-xs px-2 py-1.5 bg-slate-800 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">初期設定変更</button>
             <button onClick={handleSignOut} className="text-xs px-2 py-1.5 bg-slate-800 rounded-lg text-slate-300 hover:text-white hover:bg-red-600/30 transition-colors">ログアウト</button>
           </div>
         </div>
