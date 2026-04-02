@@ -48,7 +48,7 @@ function toFriendlyAuthErrorMessage(raw: string): string {
     return "セッションエラーが発生しました。ページを再読み込みして再試行してください"
   }
   if (message.includes("provider") && message.includes("disabled")) {
-    return "Googleログインが無効です。管理者に有効化を依頼してください"
+    return "このログイン方式は現在無効です。管理者に有効化を依頼してください"
   }
   if (message.includes("redirect_to is not allowed") || message.includes("redirect url") || message.includes("redirect_uri_mismatch")) {
     return "認証リダイレクトURL設定が一致していません。管理者に設定確認を依頼してください"
@@ -66,6 +66,19 @@ function getAuthCallbackUrl(): string {
     return `${siteUrl.replace(/\/$/, "")}/auth/callback`
   }
   return "/auth/callback"
+}
+
+function getPasswordResetUrl(): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/auth/reset-password`
+  }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  if (siteUrl) {
+    return `${siteUrl.replace(/\/$/, "")}/auth/reset-password`
+  }
+
+  return "/auth/reset-password"
 }
 
 function buildLoginPasswordCandidates(rawPassword: string): string[] {
@@ -137,6 +150,109 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
     await handleSubmit()
   }
 
+  async function handleForgotPassword() {
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!normalizedEmail) {
+      alert("パスワード再設定メール送信のため、メールアドレスを入力してください")
+      return
+    }
+
+    setLoading(true)
+    const callbackUrl = getPasswordResetUrl()
+    const { error } = await createClient().auth.resetPasswordForEmail(normalizedEmail, {
+      redirectTo: callbackUrl,
+    })
+    setLoading(false)
+
+    if (error) {
+      alert("再設定メール送信失敗: " + toFriendlyAuthErrorMessage(error.message))
+      return
+    }
+
+    alert("パスワード再設定メールを送信しました。\nメール内リンクから新しいパスワードを設定できます。")
+  }
+
+  async function handleResendConfirmationEmail() {
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!normalizedEmail) {
+      alert("確認メール再送のため、メールアドレスを入力してください")
+      return
+    }
+
+    setLoading(true)
+    const callbackUrl = getAuthCallbackUrl()
+    const { error } = await createClient().auth.resend({
+      type: "signup",
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: callbackUrl,
+      },
+    })
+    setLoading(false)
+
+    if (error) {
+      alert("確認メール再送失敗: " + toFriendlyAuthErrorMessage(error.message))
+      return
+    }
+
+    alert("確認メールを再送しました。")
+  }
+
+  async function handleMagicLinkLogin() {
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!normalizedEmail) {
+      alert("メールリンク送信のため、メールアドレスを入力してください")
+      return
+    }
+
+    setLoading(true)
+    const callbackUrl = getAuthCallbackUrl()
+    const { error } = await createClient().auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: callbackUrl,
+        shouldCreateUser: false,
+      },
+    })
+    setLoading(false)
+
+    if (error) {
+      alert("メールリンク送信失敗: " + toFriendlyAuthErrorMessage(error.message))
+      return
+    }
+
+    alert("ログイン用メールリンクを送信しました。受信メールをご確認ください。")
+  }
+
+  async function handleLineLogin() {
+    setLoading(true)
+    const callbackUrl = getAuthCallbackUrl()
+    const { data, error } = await createClient().auth.signInWithOAuth({
+      provider: "line" as "google",
+      options: {
+        redirectTo: callbackUrl,
+        skipBrowserRedirect: true,
+      },
+    })
+
+    if (error) {
+      setLoading(false)
+      alert("LINEログイン失敗: " + toFriendlyAuthErrorMessage(error.message))
+      return
+    }
+
+    if (!data?.url) {
+      setLoading(false)
+      alert("LINEログインURLの取得に失敗しました")
+      return
+    }
+
+    window.location.assign(data.url)
+  }
+
   async function handleDemoLogin() {
     const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL?.trim()
     const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD?.trim()
@@ -197,6 +313,16 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
       if (loginError) {
         const friendly = toFriendlyAuthErrorMessage(loginError)
         alert("ログイン失敗: " + friendly)
+        if (friendly.includes("メールアドレスまたはパスワードが間違っています")) {
+          if (window.confirm("メールリンクでログインしますか？")) {
+            await handleMagicLinkLogin()
+          }
+        }
+        if (friendly.includes("メール認証が完了していません")) {
+          if (window.confirm("確認メールを再送しますか？")) {
+            await handleResendConfirmationEmail()
+          }
+        }
         return 
       }
       onAuth()
@@ -355,6 +481,46 @@ function AuthView({ onAuth, onBack }: { onAuth: () => void; onBack?: () => void 
           >
             {loading ? "処理中..." : isLogin ? "パスワードでログイン" : "登録する"}
           </button>
+          {isLogin && (
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={loading}
+              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
+            >
+              パスワード再設定リンク
+            </button>
+          )}
+          {isLogin && (
+            <button
+              type="button"
+              onClick={handleResendConfirmationEmail}
+              disabled={loading}
+              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
+            >
+              確認メール再送
+            </button>
+          )}
+          {isLogin && (
+            <button
+              type="button"
+              onClick={handleMagicLinkLogin}
+              disabled={loading}
+              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
+            >
+              メールリンクログイン
+            </button>
+          )}
+          {isLogin && (
+            <button
+              type="button"
+              onClick={handleLineLogin}
+              disabled={loading}
+              className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
+            >
+              LINEでログイン
+            </button>
+          )}
           {isLogin && (
             <button
               type="button"
