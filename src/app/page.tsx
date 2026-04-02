@@ -57,15 +57,6 @@ function toFriendlyAuthErrorMessage(raw: string): string {
 
 function getAuthCallbackUrl(): string {
   if (typeof window !== "undefined") {
-    const host = window.location.hostname
-    const isLocalHost = host === "localhost" || host === "127.0.0.1"
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-
-    // Keep localhost callback stable even if dev server auto-switches to :3001.
-    if (isLocalHost && siteUrl) {
-      return `${siteUrl.replace(/\/$/, "")}/auth/callback`
-    }
-
     return `${window.location.origin}/auth/callback`
   }
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
@@ -77,14 +68,6 @@ function getAuthCallbackUrl(): string {
 
 function getPasswordResetUrl(): string {
   if (typeof window !== "undefined") {
-    const host = window.location.hostname
-    const isLocalHost = host === "localhost" || host === "127.0.0.1"
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-
-    if (isLocalHost && siteUrl) {
-      return `${siteUrl.replace(/\/$/, "")}/auth/reset-password`
-    }
-
     return `${window.location.origin}/auth/reset-password`
   }
 
@@ -476,8 +459,12 @@ export default function Home() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search)
       const authError = params.get("auth_error")
-      if (authError) {
-        alert(decodeURIComponent(authError))
+      const oauthErrorDescription = params.get("error_description")
+      const oauthError = params.get("error")
+      const displayError = authError || oauthErrorDescription || oauthError
+
+      if (displayError) {
+        alert(decodeURIComponent(displayError))
         const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`
         window.history.replaceState({}, "", cleanUrl)
       }

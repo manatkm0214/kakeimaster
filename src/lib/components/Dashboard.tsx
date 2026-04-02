@@ -47,6 +47,51 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
     return { income, expense, saving, investment, balance, savingRate, fixedRate, wasteRate, defenseFund, fixed, categoryMap, budgetProgress }
   }, [transactions, budgets, currentMonth])
 
+  const forecast = useMemo(() => {
+    const [year, month] = currentMonth.split("-").map(Number)
+    const now = new Date()
+    const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === month
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const daysElapsed = isCurrentMonth ? Math.max(1, now.getDate()) : daysInMonth
+
+    const projectedIncome = Math.round((stats.income / daysElapsed) * daysInMonth)
+    const projectedExpense = Math.round((stats.expense / daysElapsed) * daysInMonth)
+    const projectedSaving = Math.round((stats.saving / daysElapsed) * daysInMonth)
+    const projectedInvestment = Math.round((stats.investment / daysElapsed) * daysInMonth)
+    const projectedBalance = projectedIncome - projectedExpense - projectedSaving - projectedInvestment
+
+    const recentMonths = Array.from({ length: 3 }).map((_, index) => {
+      const d = new Date(year, month - 1 - index, 1)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    })
+    const targetMonths = isCurrentMonth ? recentMonths : [currentMonth, ...recentMonths.slice(0, 2)]
+
+    const monthlyBalances = targetMonths.map((m) => {
+      const monthly = transactions.filter((t) => t.date.startsWith(m))
+      const income = monthly.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0)
+      const expense = monthly.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0)
+      const saving = monthly.filter((t) => t.type === "saving").reduce((s, t) => s + t.amount, 0)
+      const investment = monthly.filter((t) => t.type === "investment").reduce((s, t) => s + t.amount, 0)
+      return income - expense - saving - investment
+    }).filter((v) => Number.isFinite(v))
+
+    const avgMonthlyBalance = monthlyBalances.length > 0
+      ? Math.round(monthlyBalances.reduce((sum, value) => sum + value, 0) / monthlyBalances.length)
+      : stats.balance
+
+    return {
+      daysElapsed,
+      daysInMonth,
+      projectedIncome,
+      projectedExpense,
+      projectedSaving,
+      projectedInvestment,
+      projectedBalance,
+      avgMonthlyBalance,
+      annualProjection: avgMonthlyBalance * 12,
+    }
+  }, [currentMonth, stats.balance, stats.expense, stats.income, stats.investment, stats.saving, transactions])
+
   const allocation = useMemo(() => {
     const takeHome = profile?.allocation_take_home && profile.allocation_take_home > 0
       ? profile.allocation_take_home
@@ -124,6 +169,40 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
               </p>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* 赤字アラートと将来予測 */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-300">🔮 赤字・将来予測</h3>
+
+        <div className={`rounded-xl border p-3 ${stats.balance < 0 ? "border-red-500/40 bg-red-900/20" : "border-emerald-500/30 bg-emerald-900/20"}`}>
+          <p className="text-xs text-slate-300 mb-1">今月の実績判定</p>
+          <p className={`text-sm font-semibold ${stats.balance < 0 ? "text-red-300" : "text-emerald-300"}`}>
+            {stats.balance < 0 ? `赤字です（${formatCurrency(Math.abs(stats.balance))}）` : `黒字です（${formatCurrency(stats.balance)}）`}
+          </p>
+        </div>
+
+        <div className={`rounded-xl border p-3 ${forecast.projectedBalance < 0 ? "border-red-500/40 bg-red-900/20" : "border-blue-500/30 bg-blue-900/20"}`}>
+          <p className="text-xs text-slate-300 mb-1">月末見込み（現在ペース）</p>
+          <p className={`text-sm font-semibold ${forecast.projectedBalance < 0 ? "text-red-300" : "text-blue-300"}`}>
+            {forecast.projectedBalance < 0
+              ? `月末は赤字見込み ${formatCurrency(Math.abs(forecast.projectedBalance))}`
+              : `月末は黒字見込み ${formatCurrency(forecast.projectedBalance)}`}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            進捗 {forecast.daysElapsed}/{forecast.daysInMonth}日 | 収入見込み {formatCurrency(forecast.projectedIncome)} | 支出見込み {formatCurrency(forecast.projectedExpense)}
+          </p>
+        </div>
+
+        <div className={`rounded-xl border p-3 ${forecast.annualProjection < 0 ? "border-red-500/40 bg-red-900/20" : "border-violet-500/30 bg-violet-900/20"}`}>
+          <p className="text-xs text-slate-300 mb-1">12か月予測（直近3か月平均ベース）</p>
+          <p className={`text-sm font-semibold ${forecast.annualProjection < 0 ? "text-red-300" : "text-violet-300"}`}>
+            {forecast.annualProjection < 0
+              ? `年間で赤字見込み ${formatCurrency(Math.abs(forecast.annualProjection))}`
+              : `年間で黒字見込み ${formatCurrency(forecast.annualProjection)}`}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">平均月次収支: {formatCurrency(forecast.avgMonthlyBalance)}</p>
         </div>
       </div>
 
