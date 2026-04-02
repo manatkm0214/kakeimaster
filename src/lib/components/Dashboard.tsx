@@ -25,6 +25,7 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
     const parsed = Number(raw || 0)
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
   })
+  const [strategyMode, setStrategyMode] = useState<"standard" | "inflation" | "deficit">("standard")
 
   const stats = useMemo(() => {
     const monthly = transactions.filter(t => t.date.startsWith(currentMonth))
@@ -119,6 +120,88 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
     }
   }, [profile, stats.expense, stats.fixed, stats.income, stats.investment, stats.saving])
 
+  const expenseTrend = useMemo(() => {
+    const [year, month] = currentMonth.split("-").map(Number)
+    const recentMonths = Array.from({ length: 3 }).map((_, index) => {
+      const d = new Date(year, month - 1 - index, 1)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    })
+
+    const monthlyExpenses = recentMonths.map((m) => {
+      const monthly = transactions.filter((t) => t.date.startsWith(m) && t.type === "expense")
+      return monthly.reduce((sum, t) => sum + t.amount, 0)
+    })
+
+    const current = monthlyExpenses[0] ?? 0
+    const base = monthlyExpenses.slice(1)
+    const baseAvg = base.length > 0
+      ? base.reduce((sum, value) => sum + value, 0) / base.length
+      : current
+
+    const changeRate = baseAvg > 0 ? Math.round(((current - baseAvg) / baseAvg) * 100) : 0
+
+    return {
+      current,
+      baseAvg: Math.round(baseAvg),
+      changeRate,
+      pressure: changeRate >= 5,
+    }
+  }, [currentMonth, transactions])
+
+  const policyTargets = useMemo(() => {
+    if (strategyMode === "inflation") {
+      return {
+        title: "物価高対策モード",
+        fixed: 33,
+        variable: 22,
+        savings: 25,
+        notes: "生活必需を守りつつ、変動費を先に削減して実質可処分を守る配分",
+      }
+    }
+    if (strategyMode === "deficit") {
+      return {
+        title: "赤字改善モード",
+        fixed: 30,
+        variable: 20,
+        savings: 30,
+        notes: "固定費の見直しを優先し、先取り貯蓄で赤字再発を防ぐ配分",
+      }
+    }
+    return {
+      title: "経済標準モード",
+      fixed: 35,
+      variable: 25,
+      savings: 20,
+      notes: "手取りの範囲で持続可能性を重視した標準配分",
+    }
+  }, [strategyMode])
+
+  const improvementNav = useMemo(() => {
+    const actions: string[] = []
+
+    if (allocation.fixed.actual > policyTargets.fixed) {
+      actions.push(`固定費が目標を ${allocation.fixed.actual - policyTargets.fixed}% 超過。通信・保険・サブスクを固定費から優先見直し。`)
+    }
+    if (allocation.variable.actual > policyTargets.variable) {
+      actions.push(`変動費が目標を ${allocation.variable.actual - policyTargets.variable}% 超過。食費・日用品は週予算上限を設定。`)
+    }
+    if (allocation.savings.actual < policyTargets.savings) {
+      actions.push(`貯蓄+投資が目標を ${policyTargets.savings - allocation.savings.actual}% 下回り。給料日に先取り設定を増額。`)
+    }
+    if (stats.balance < 0) {
+      actions.push(`今月は赤字 ${formatCurrency(Math.abs(stats.balance))}。来月まで固定費を少なくとも ${formatCurrency(Math.ceil(Math.abs(stats.balance) / 2))} 圧縮。`)
+    }
+    if (expenseTrend.pressure) {
+      actions.push(`直近支出が平均比 +${expenseTrend.changeRate}%。物価高圧力あり。代替ブランド・まとめ買い・電力プラン見直しを実施。`)
+    }
+
+    if (actions.length === 0) {
+      actions.push("配分は健全圏です。余剰分は防衛資金6か月分の積み増しを優先。")
+    }
+
+    return actions
+  }, [allocation.fixed.actual, allocation.savings.actual, allocation.variable.actual, expenseTrend.changeRate, expenseTrend.pressure, policyTargets.fixed, policyTargets.savings, policyTargets.variable, stats.balance])
+
   const { level, color, bar } = safeLevel(stats.savingRate)
 
   const cards = [
@@ -199,6 +282,63 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
           </p>
         </div>
       )}
+
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-300">🧭 改善ナビ（経済モード）</h3>
+          <span className="text-xs text-slate-500">支出トレンド {expenseTrend.changeRate >= 0 ? `+${expenseTrend.changeRate}` : expenseTrend.changeRate}%</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setStrategyMode("standard")}
+            className={`text-xs py-2 rounded-lg border transition-all ${strategyMode === "standard" ? "bg-violet-600 border-violet-500 text-white" : "border-slate-700 text-slate-300"}`}
+          >
+            経済標準
+          </button>
+          <button
+            type="button"
+            onClick={() => setStrategyMode("inflation")}
+            className={`text-xs py-2 rounded-lg border transition-all ${strategyMode === "inflation" ? "bg-violet-600 border-violet-500 text-white" : "border-slate-700 text-slate-300"}`}
+          >
+            物価高対策
+          </button>
+          <button
+            type="button"
+            onClick={() => setStrategyMode("deficit")}
+            className={`text-xs py-2 rounded-lg border transition-all ${strategyMode === "deficit" ? "bg-violet-600 border-violet-500 text-white" : "border-slate-700 text-slate-300"}`}
+          >
+            赤字改善
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 text-xs text-slate-300 space-y-1">
+          <p className="font-semibold text-slate-200">{policyTargets.title}</p>
+          <p>目標配分: 固定費 {policyTargets.fixed}% / 変動費 {policyTargets.variable}% / 貯蓄+投資 {policyTargets.savings}%</p>
+          <p className="text-slate-400">{policyTargets.notes}</p>
+        </div>
+
+        <div className="space-y-2">
+          {improvementNav.map((action, index) => (
+            <div key={action} className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 text-xs text-slate-300">
+              <span className="text-slate-400 mr-2">{index + 1}.</span>
+              {action}
+            </div>
+          ))}
+        </div>
+
+        <details className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 text-xs text-slate-300">
+          <summary className="cursor-pointer font-semibold text-slate-200">経済指標の説明資料</summary>
+          <div className="mt-3 space-y-2 text-slate-300 leading-relaxed">
+            <p><span className="font-semibold">CPI（消費者物価指数）</span>: 物価の平均的な上昇率。上がるほど同じ金額で買える量が減ります。</p>
+            <p><span className="font-semibold">実質賃金</span>: 名目賃金から物価上昇分を差し引いた購買力。実質賃金が下がると生活は苦しくなります。</p>
+            <p><span className="font-semibold">政策金利</span>: 借入金利や預金金利に影響。高金利局面では変動金利ローンやリボの負担が増えやすいです。</p>
+            <p><span className="font-semibold">為替（円安）</span>: 輸入品やエネルギー価格に影響。円安が進むと食料・光熱費が上がりやすいです。</p>
+            <p><span className="font-semibold">家計での使い方</span>: 物価高局面は「固定費の契約見直し」と「変動費の週予算化」を先に行い、余力を先取り貯蓄へ回すのが有効です。</p>
+          </div>
+        </details>
+      </div>
 
       {/* 赤字アラートと将来予測 */}
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">

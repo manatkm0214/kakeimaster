@@ -290,13 +290,13 @@ export default function PresetSetup({ onComplete, initialProfile = null, onCance
 
         <div className="grid grid-cols-3 gap-2">
           <button type="button" onClick={() => applyPreset("balanced")} className={`py-2 text-xs bg-slate-900 border rounded-xl ${accentPreset === "balanced" ? "border-violet-500 text-violet-300" : "border-slate-700 hover:border-violet-500"}`}>
-            バランス
+            経済標準
           </button>
           <button type="button" onClick={() => applyPreset("defense")} className={`py-2 text-xs bg-slate-900 border rounded-xl ${accentPreset === "defense" ? "border-emerald-500 text-emerald-300" : "border-slate-700 hover:border-emerald-500"}`}>
-            守り重視
+            物価高対策
           </button>
           <button type="button" onClick={() => applyPreset("growth")} className={`py-2 text-xs bg-slate-900 border rounded-xl ${accentPreset === "growth" ? "border-amber-500 text-amber-300" : "border-slate-700 hover:border-amber-500"}`}>
-            成長重視
+            赤字改善
           </button>
         </div>
 
