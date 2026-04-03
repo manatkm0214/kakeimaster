@@ -496,7 +496,7 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
             {categoryAllocationView.slice(0, 9).map((row) => {
               const diff = row.actualPct - row.targetPct
               const over = diff > 0
-              // 固定費・変動費・貯蓄カテゴリ名に一致する場合は手取り基準金額も計算
+              // 固定費・変動費・貯蓄カテゴリ名、または「食費」カテゴリの場合は手取り基準金額も計算
               let takeHomeTarget = null
               if (allocation.takeHome > 0) {
                 if (row.category.includes("固定")) {
@@ -505,6 +505,17 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
                   takeHomeTarget = Math.round(allocation.takeHome * allocation.variable.target / 100)
                 } else if (row.category.includes("貯") || row.category.includes("投資")) {
                   takeHomeTarget = Math.round(allocation.takeHome * allocation.savings.target / 100)
+                } else if (row.category === "食費") {
+                  // 食費カテゴリは変動費のうち「食費」割合で計算
+                  // 変動費目標金額が分かればそのうち食費の割合を掛ける
+                  const variableTotal = categoryAllocationView
+                    .filter(r => r.category !== "固定費" && (r.category !== "貯蓄" && r.category !== "投資"))
+                    .reduce((sum, r) => sum + (r.category === "食費" ? 0 : r.targetAmount), 0)
+                  const foodTarget = row.targetAmount
+                  const variableTarget = allocation.variable.target
+                  // 変動費全体のうち食費の割合
+                  const pct = variableTotal > 0 ? foodTarget / variableTotal : 0
+                  takeHomeTarget = Math.round(allocation.takeHome * variableTarget / 100 * pct)
                 }
               }
               return (
