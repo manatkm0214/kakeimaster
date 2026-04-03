@@ -92,7 +92,9 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
     const savingRate = income > 0 ? Math.round(((saving + investment) / income) * 100) : 0
     const fixedRate = expense > 0 ? Math.round((fixed / expense) * 100) : 0
     const wasteRate = income > 0 ? Math.round(((expense - fixed) / income) * 100) : 0
-    const defenseFund = saving * 6
+    const reserveStock = transactions
+      .filter((t) => t.type === "saving" || t.type === "investment")
+      .reduce((sum, t) => sum + t.amount, 0)
 
     // カテゴリ別支出
     const categoryMap: Record<string, number> = {}
@@ -106,7 +108,7 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
       return { ...b, spent, pct: Math.round((spent / b.amount) * 100) }
     })
 
-    return { income, expense, saving, investment, balance, savingRate, fixedRate, wasteRate, defenseFund, fixed, categoryMap, budgetProgress }
+    return { income, expense, saving, investment, balance, savingRate, fixedRate, wasteRate, reserveStock, fixed, categoryMap, budgetProgress }
   }, [transactions, budgets, currentMonth])
 
   const forecast = useMemo(() => {
@@ -301,11 +303,17 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
 
   const { level, color, bar } = safeLevel(stats.savingRate)
 
+  const defenseFund = useMemo(() => {
+    if (stats.reserveStock > 0) return stats.reserveStock
+    if (monthlySavingsGoal > 0) return monthlySavingsGoal
+    return stats.saving + stats.investment
+  }, [monthlySavingsGoal, stats.investment, stats.reserveStock, stats.saving])
+
   const defenseMonthlyBase = defenseBasis === "fixed" && stats.fixed > 0 ? stats.fixed : stats.expense
   const defenseMinimum = Math.round(defenseMonthlyBase * 3)
   const defenseTarget = Math.round(defenseMonthlyBase * 6)
-  const defenseShortfall = Math.max(0, defenseTarget - stats.defenseFund)
-  const defenseProgress = defenseTarget > 0 ? Math.min(100, Math.round((stats.defenseFund / defenseTarget) * 100)) : 0
+  const defenseShortfall = Math.max(0, defenseTarget - defenseFund)
+  const defenseProgress = defenseTarget > 0 ? Math.min(100, Math.round((defenseFund / defenseTarget) * 100)) : 0
 
   function formatByUnit(value: number): string {
     const unitLabel = moneyUnit === 1 ? "円" : moneyUnit === 1000 ? "千円" : "万円"
@@ -647,7 +655,7 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
           { label: "貯蓄率", value: `${stats.savingRate}%`, good: stats.savingRate >= 20, benchmark: "目安: 20%以上" },
           { label: "固定費率", value: `${stats.fixedRate}%`, good: stats.fixedRate <= 50, benchmark: "目安: 50%以下" },
           { label: "浪費率", value: `${stats.wasteRate}%`, good: stats.wasteRate <= 30, benchmark: "目安: 30%以下" },
-          { label: "防衛資金（見込み）", value: formatCurrency(stats.defenseFund), good: stats.defenseFund >= defenseMinimum, benchmark: `目安: ${formatCurrency(defenseMinimum)}〜${formatCurrency(defenseTarget)}` },
+          { label: "防衛資金（見込み）", value: formatCurrency(defenseFund), good: defenseFund >= defenseMinimum, benchmark: `目安: ${formatCurrency(defenseMinimum)}〜${formatCurrency(defenseTarget)}` },
           { label: "固定費合計", value: formatCurrency(stats.fixed), good: true, benchmark: "目安: 前月比で維持・微減" },
           { label: "投資額", value: formatCurrency(stats.investment), good: true, benchmark: "目安: 収入の10〜20%" },
         ].map(item => (
@@ -687,7 +695,7 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
           目安: {defenseBasis === "expense" ? "総支出" : "固定費"}の3〜6か月分（最低 {formatCurrency(defenseMinimum)} / 推奨 {formatCurrency(defenseTarget)}）
         </p>
         <p className={`text-sm font-semibold ${defenseShortfall > 0 ? "text-amber-300" : "text-emerald-300"}`}>
-          現在 {formatCurrency(stats.defenseFund)} / 不足 {formatCurrency(defenseShortfall)}
+          現在 {formatCurrency(defenseFund)} / 不足 {formatCurrency(defenseShortfall)}
         </p>
         <p className="text-xs text-slate-400">
           到達見込み: {defenseEtaMonths === 0 ? "達成済み" : defenseEtaMonths == null ? "算出不可（貯金ペース0以下）" : `約${defenseEtaMonths}か月（${defenseEtaDateLabel}）`}
