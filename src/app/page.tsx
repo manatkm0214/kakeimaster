@@ -15,15 +15,19 @@ import AnnualReport from "@/lib/components/AnnualReport"
 import PresetSetup from "@/lib/components/PresetSetup"
 
 function validatePassword(pwd: string) {
-  const hasLetters = /[a-zA-Z]/.test(pwd)
-  const hasNumbers = /[0-9]/.test(pwd)
-  const isLongEnough = pwd.length >= 8
-  return { hasLetters, hasNumbers, isLongEnough }
+  const normalized = pwd.normalize("NFKC").trim()
+  const hasLowercase = /[a-z]/.test(normalized)
+  const hasUppercase = /[A-Z]/.test(normalized)
+  const hasNumbers = /[0-9]/.test(normalized)
+  const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};':"|<>?,./`~]/.test(normalized)
+  const isLongEnough = normalized.length >= 8
+  const meetsRule = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(normalized)
+  return { hasLowercase, hasUppercase, hasNumbers, hasSymbols, isLongEnough, meetsRule }
 }
 
 function isPasswordValid(pwd: string): boolean {
-  const { hasLetters, hasNumbers, isLongEnough } = validatePassword(pwd)
-  return hasLetters && hasNumbers && isLongEnough
+  const { meetsRule } = validatePassword(pwd)
+  return meetsRule
 }
 
 function toFriendlyAuthErrorMessage(raw: string): string {
@@ -35,8 +39,12 @@ function toFriendlyAuthErrorMessage(raw: string): string {
   if (message.includes("email not confirmed")) {
     return "メール認証が完了していません。受信メールをご確認ください"
   }
-  if (message.includes("too many requests") || message.includes("over_email_send_rate_limit")) {
-    return "試行回数が多すぎます。少し待ってから再試行してください"
+  if (
+    message.includes("too many requests") ||
+    message.includes("over_email_send_rate_limit") ||
+    message.includes("email rate limit exceeded")
+  ) {
+    return "メール送信の上限に達しました。60秒以上あけてから再試行してください"
   }
   if (message.includes("network") || message.includes("fetch")) {
     return "通信エラーです。ネットワーク接続を確認してください"
@@ -44,7 +52,19 @@ function toFriendlyAuthErrorMessage(raw: string): string {
   if (message.includes("invalid api key") || message.includes("invalid_api_key")) {
     return "認証設定に問題があります。管理者にお問い合わせください"
   }
-  if (message.includes("jwt") || message.includes("token")) {
+  if (
+    message.includes("token") &&
+    (message.includes("expired") || message.includes("invalid") || message.includes("not found"))
+  ) {
+    return "メールリンクの有効期限切れ、またはリンクが無効です。最新のメールを開いて再試行してください"
+  }
+  if (message.includes("otp") && (message.includes("expired") || message.includes("invalid"))) {
+    return "PINコードの有効期限が切れているか、コードが正しくありません。最新のPINを確認してください"
+  }
+  if (message.includes("code verifier") || message.includes("flow state")) {
+    return "認証リンクが無効です。最新のメールリンクからもう一度ログインしてください"
+  }
+  if (message.includes("jwt")) {
     return "セッションエラーが発生しました。ページを再読み込みして再試行してください"
   }
   if (message.includes("provider") && message.includes("disabled")) {
@@ -94,6 +114,8 @@ function buildLoginPasswordCandidates(rawPassword: string): string[] {
 
   return [...new Set(candidates)]
 }
+
+const EMAIL_COOLDOWN_STORAGE_KEY = "kakeibo_email_cooldown_until"
 
 // ─── Auth View ──────────────────────────────────────────────────────────────
 function WelcomeView({ onStartAuth }: { onStartAuth: () => void }) {
@@ -152,16 +174,15 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
   const [email, setEmail] = useState(initialEmail ?? "")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [emailCooldownUntil, setEmailCooldownUntil] = useState(0)
+  const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now())
   const [signupMessage, setSignupMessage] = useState<{ type: "success" | "error"; text: string } | null>(initialMessage ?? null)
   const [postSignupResendEmail, setPostSignupResendEmail] = useState<string | null>(null)
-  const [otpCode, setOtpCode] = useState("")
-  const [otpRequested, setOtpRequested] = useState(false)
   const [lineAuthUrl, setLineAuthUrl] = useState<string | null>(null)
   const [lineQrUrl, setLineQrUrl] = useState<string | null>(null)
   const [showLineQr, setShowLineQr] = useState(false)
-  const [loginQrImageUrl, setLoginQrImageUrl] = useState<string | null>(null)
-  const [showLoginQr, setShowLoginQr] = useState(false)
   const lineLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_LINE_LOGIN === "true"
+  const emailCooldownSeconds = Math.max(0, Math.ceil((emailCooldownUntil - currentTimeMs) / 1000))
 
   useEffect(() => {
     if (!initialEmail) return
@@ -172,6 +193,83 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     if (!initialMessage) return
     setSignupMessage(initialMessage)
   }, [initialMessage])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const stored = window.localStorage.getItem(EMAIL_COOLDOWN_STORAGE_KEY)
+    if (!stored) return
+
+    const cooldownUntil = Number(stored)
+    if (Number.isFinite(cooldownUntil) && cooldownUntil > Date.now()) {
+      setEmailCooldownUntil(cooldownUntil)
+      setCurrentTimeMs(Date.now())
+      return
+    }
+
+    window.localStorage.removeItem(EMAIL_COOLDOWN_STORAGE_KEY)
+  }, [])
+
+  useEffect(() => {
+    if (emailCooldownUntil <= Date.now()) {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(EMAIL_COOLDOWN_STORAGE_KEY)
+      }
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      const now = Date.now()
+      setCurrentTimeMs(now)
+      if (now >= emailCooldownUntil) {
+        setEmailCooldownUntil(0)
+      }
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [emailCooldownUntil])
+
+  function isEmailRateLimitError(raw: string): boolean {
+    const message = raw.toLowerCase()
+    return (
+      message.includes("over_email_send_rate_limit") ||
+      message.includes("email rate limit exceeded") ||
+      (message.includes("too many requests") && message.includes("email"))
+    )
+  }
+
+  function getRateLimitWaitSeconds(raw: string, fallbackSeconds = 65): number {
+    const message = raw.toLowerCase()
+    const matches = [
+      message.match(/(?:in|after)\s*(\d+)\s*(?:seconds?|sec|s)?/i),
+      message.match(/(\d+)\s*秒/),
+      message.match(/(\d+)\s*(?:seconds?|sec|s)/i),
+    ]
+
+    for (const matched of matches) {
+      const value = Number(matched?.[1])
+      if (Number.isFinite(value) && value > 0) {
+        return Math.min(Math.max(value + 2, 5), 600)
+      }
+    }
+
+    return fallbackSeconds
+  }
+
+  function startEmailCooldown(seconds = 65) {
+    const safeSeconds = Math.min(Math.max(seconds, 5), 600)
+    const cooldownUntil = Date.now() + safeSeconds * 1000
+    setCurrentTimeMs(Date.now())
+    setEmailCooldownUntil(cooldownUntil)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(EMAIL_COOLDOWN_STORAGE_KEY, String(cooldownUntil))
+    }
+  }
+
+  function ensureEmailSendAvailable(): boolean {
+    if (emailCooldownSeconds <= 0) return true
+    setSignupMessage({ type: "error", text: `メール送信は ${emailCooldownSeconds} 秒後に再試行できます。` })
+    return false
+  }
 
   async function createLineAuthUrl() {
     const response = await fetch("/api/auth/line/start", { method: "GET" })
@@ -200,6 +298,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
       setSignupMessage({ type: "error", text: "メールアドレスを入力してからパスワード再設定リンクを押してください" })
       return
     }
+    if (!ensureEmailSendAvailable()) return
 
     setLoading(true)
     const callbackUrl = getPasswordResetUrl()
@@ -209,10 +308,12 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     setLoading(false)
 
     if (error) {
+      if (isEmailRateLimitError(error.message)) startEmailCooldown(getRateLimitWaitSeconds(error.message))
       setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(error.message) })
       return
     }
 
+    startEmailCooldown()
     setSignupMessage({ type: "success", text: `${normalizedEmail} にパスワード再設定メールを送信しました。メール内のリンクから新しいパスワードを設定してください。` })
   }
 
@@ -223,6 +324,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
       setSignupMessage({ type: "error", text: "メールアドレスを入力してから確認メール再送を押してください" })
       return
     }
+    if (!ensureEmailSendAvailable()) return
 
     setLoading(true)
     const callbackUrl = getAuthCallbackUrl()
@@ -236,38 +338,13 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     setLoading(false)
 
     if (error) {
+      if (isEmailRateLimitError(error.message)) startEmailCooldown(getRateLimitWaitSeconds(error.message))
       setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(error.message) })
       return
     }
 
+    startEmailCooldown()
     setSignupMessage({ type: "success", text: `${normalizedEmail} に確認メールを再送しました。受信メールのリンクをクリックして認証を完了してください。` })
-  }
-
-  async function handleMagicLinkLogin() {
-    const normalizedEmail = email.trim().toLowerCase()
-
-    if (!normalizedEmail) {
-      setSignupMessage({ type: "error", text: "メールアドレスを入力してからメールリンクログインを押してください" })
-      return
-    }
-
-    setLoading(true)
-    const callbackUrl = getAuthCallbackUrl()
-    const { error } = await createClient().auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        emailRedirectTo: callbackUrl,
-        shouldCreateUser: false,
-      },
-    })
-    setLoading(false)
-
-    if (error) {
-      setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(error.message) })
-      return
-    }
-
-    setSignupMessage({ type: "success", text: `${normalizedEmail} にログイン用リンクを送信しました。受信メールをご確認ください。` })
   }
 
   async function handlePostSignupResend() {
@@ -275,6 +352,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
       setSignupMessage({ type: "error", text: "再送先メールアドレスが見つかりません。メールアドレスを入力して確認メール再送を押してください" })
       return
     }
+    if (!ensureEmailSendAvailable()) return
 
     setLoading(true)
     const callbackUrl = getAuthCallbackUrl()
@@ -288,10 +366,12 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     setLoading(false)
 
     if (error) {
+      if (isEmailRateLimitError(error.message)) startEmailCooldown(getRateLimitWaitSeconds(error.message))
       setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(error.message) })
       return
     }
 
+    startEmailCooldown()
     setSignupMessage({ type: "success", text: `${postSignupResendEmail} に確認メールを再送しました。届かない場合は迷惑メールフォルダも確認してください。` })
   }
 
@@ -314,79 +394,9 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     setSignupMessage({ type: "success", text: "別のメールアドレスで新規登録できます。メールアドレスを入力して登録してください。" })
   }
 
-  function handleShowLoginQr() {
-    const normalizedEmail = email.trim().toLowerCase()
-    if (!normalizedEmail) {
-      setSignupMessage({ type: "error", text: "メールアドレスを入力してからQRコードを表示してください" })
-      return
-    }
-
-    const origin = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "")
-    const loginUrl = `${origin}/?login_email=${encodeURIComponent(normalizedEmail)}`
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&ecc=M&data=${encodeURIComponent(loginUrl)}`
-    setLoginQrImageUrl(qrUrl)
-    setShowLoginQr(true)
-    setSignupMessage({ type: "success", text: "スマホのカメラでQRを読み取るとこのアプリが開き、メールアドレスが自動入力されます。そのままPINコードでログインできます。" })
-  }
-
-  async function handleSendOtpCode() {
-    const normalizedEmail = email.trim().toLowerCase()
-
-    if (!normalizedEmail) {
-      setSignupMessage({ type: "error", text: "メールアドレスを入力してからPINコード送信を押してください" })
-      return
-    }
-
-    setLoading(true)
-    const { error } = await createClient().auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        shouldCreateUser: false,
-      },
-    })
-    setLoading(false)
-
-    if (error) {
-      setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(error.message) })
-      return
-    }
-
-    setOtpRequested(true)
-    setSignupMessage({ type: "success", text: `${normalizedEmail} にPINコードを送信しました。メールの6桁PINを入力してログインしてください。` })
-  }
-
-  async function handleOtpVerify() {
-    const normalizedEmail = email.trim().toLowerCase()
-    const token = otpCode.trim()
-
-    if (!normalizedEmail) {
-      setSignupMessage({ type: "error", text: "メールアドレスを入力してください" })
-      return
-    }
-    if (!token) {
-      setSignupMessage({ type: "error", text: "PINコードを入力してください" })
-      return
-    }
-
-    setLoading(true)
-    const { data, error } = await createClient().auth.verifyOtp({
-      email: normalizedEmail,
-      token,
-      type: "email",
-    })
-    setLoading(false)
-
-    if (error) {
-      setSignupMessage({ type: "error", text: "PINコード認証に失敗しました。最新のPINを確認してください。" })
-      return
-    }
-
-    await onAuth(data.user ?? data.session?.user ?? null)
-  }
-
   async function handleLineLogin() {
     if (!lineLoginEnabled) {
-      setSignupMessage({ type: "error", text: "この環境ではLINEログインが未対応です。メールリンクまたはPINコードをご利用ください。" })
+      setSignupMessage({ type: "error", text: "この環境ではLINEログインが未対応です。パスワードログインをご利用ください。" })
       return
     }
 
@@ -425,15 +435,17 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
 
   async function handleSubmit() {
     const normalizedEmail = email.trim().toLowerCase()
+    const normalizedPassword = password.normalize("NFKC").trim()
     const supabase = createClient()
 
     setSignupMessage(null)
 
     if (!normalizedEmail || !password) { setSignupMessage({ type: "error", text: "メールアドレスとパスワードを入力してください" }); return }
-    if (!isLogin && !isPasswordValid(password)) {
-      setSignupMessage({ type: "error", text: "パスワードは8文字以上・英字・数字を含む必要があります" })
+    if (!isLogin && !isPasswordValid(normalizedPassword)) {
+      setSignupMessage({ type: "error", text: "パスワードは小文字・大文字・数字を含む8文字以上で入力してください（記号は任意、例: Abc12345）" })
       return
     }
+    if (!isLogin && !ensureEmailSendAvailable()) return
     setLoading(true)
     
     if (isLogin) {
@@ -463,7 +475,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
       if (loginError) {
         const friendly = toFriendlyAuthErrorMessage(loginError)
         if (friendly.includes("メールアドレスまたはパスワードが間違っています")) {
-          setSignupMessage({ type: "error", text: friendly + "　→ 下の「メールリンクログイン」も使えます" })
+          setSignupMessage({ type: "error", text: friendly + "　→ 下の「パスワードを忘れた」から再設定できます" })
         } else if (friendly.includes("メール認証が完了していません")) {
           setSignupMessage({ type: "error", text: friendly + "　→ 下の「確認メール再送」で再送できます" })
         } else {
@@ -476,7 +488,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
     } else {
       const { data: signUpData, error } = await supabase.auth.signUp({
         email: normalizedEmail,
-        password,
+        password: normalizedPassword,
         options: {
           emailRedirectTo: getAuthCallbackUrl(),
         },
@@ -484,12 +496,27 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
       setLoading(false)
       if (error) {
         setPostSignupResendEmail(null)
+        if (isEmailRateLimitError(error.message)) {
+          startEmailCooldown(getRateLimitWaitSeconds(error.message))
+        }
+        const lowerMessage = error.message.toLowerCase()
+        const alreadyRegistered = lowerMessage.includes("already registered") || lowerMessage.includes("already exists")
+        if (alreadyRegistered) {
+          setIsLogin(true)
+          setPostSignupResendEmail(normalizedEmail)
+          setSignupMessage({
+            type: "error",
+            text: "このメールアドレスは既に登録されています。ログインに切り替えました。メール未認証の場合は「確認メール再送」、忘れた場合は「パスワードを忘れた」をお使いください。",
+          })
+          return
+        }
         let message = error.message || "不明なエラーが発生しました"
         if (message.includes("Invalid API key") || message.includes("invalid_api_key")) message = "Supabaseの設定に問題があります。管理者にお問い合わせください。"
-        if (message.includes("already registered") || message.includes("already exists")) message = "このメールアドレスは既に登録されています"
-        if (message.includes("Password should")) message = "パスワードは8文字以上で、英字と数字を含む必要があります"
+        if (message.includes("Password should")) {
+          message = `パスワード形式が要件を満たしていません。小文字・大文字・数字を含む8文字以上（記号は任意、例: Abc12345）で再試行してください。\n詳細: ${error.message}`
+        }
         if (message.includes("invalid email")) message = "有効なメールアドレスを入力してください"
-        if (message.includes("validation failed")) message = "入力内容を確認してください。特にパスワードは英字と数字を含む8文字以上が必要です"
+        if (message.includes("validation failed")) message = "入力内容を確認してください。特にパスワードは小文字・大文字・数字を含む8文字以上で入力してください（記号は任意、例: Abc12345）"
         setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(message) })
         return
       }
@@ -609,7 +636,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
               <button
                 type="button"
                 onClick={handlePostSignupResend}
-                disabled={loading}
+                disabled={loading || emailCooldownSeconds > 0}
                 className="w-full py-2 text-xs text-emerald-200 bg-emerald-900/40 border border-emerald-700/60 hover:bg-emerald-900/60 rounded-xl disabled:opacity-50"
               >
                 確認メールをもう一度送る（ワンクリック）
@@ -652,18 +679,24 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
             {!isLogin && password && (
               <div className="text-xs text-slate-400 mt-2 space-y-1">
                 {(() => {
-                  const { hasLetters, hasNumbers, isLongEnough } = validatePassword(password)
-                  const allValid = hasLetters && hasNumbers && isLongEnough
+                  const { hasLowercase, hasUppercase, hasNumbers, hasSymbols, isLongEnough, meetsRule } = validatePassword(password)
+                  const allValid = meetsRule
                   return (
                     <>
                       <p className={allValid ? "text-emerald-400" : ""}>
                         <span>{isLongEnough ? "✓" : "✕"} 8文字以上 ({password.length}文字)</span>
                       </p>
-                      <p className={hasLetters ? "text-emerald-400" : ""}>
-                        <span>{hasLetters ? "✓" : "✕"} 英字を含む (A-Z, a-z)</span>
+                      <p className={hasLowercase ? "text-emerald-400" : ""}>
+                        <span>{hasLowercase ? "✓" : "✕"} 小文字を含む (a-z)</span>
+                      </p>
+                      <p className={hasUppercase ? "text-emerald-400" : ""}>
+                        <span>{hasUppercase ? "✓" : "✕"} 大文字を含む (A-Z)</span>
                       </p>
                       <p className={hasNumbers ? "text-emerald-400" : ""}>
                         <span>{hasNumbers ? "✓" : "✕"} 数字を含む (0-9)</span>
+                      </p>
+                      <p className={hasSymbols ? "text-emerald-400" : ""}>
+                        <span>{hasSymbols ? "✓" : "✕"} 記号を含む (!@#$...)</span>
                       </p>
                     </>
                   )
@@ -673,20 +706,23 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
           </div>
           <button
             onClick={handlePasswordLogin}
-            disabled={loading || (!isLogin && !isPasswordValid(password))}
+            disabled={loading || (!isLogin && (!isPasswordValid(password) || emailCooldownSeconds > 0))}
             className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold transition-all"
           >
             {loading ? "処理中..." : isLogin ? "パスワードでログイン" : "登録する"}
           </button>
           {isLogin && (
-            <p className="text-[11px] text-slate-400">ログイン方法: パスワード / メールリンク / PINコード / LINE</p>
+            <p className="text-[11px] text-slate-400">ログイン方法: パスワード / LINE</p>
+          )}
+          {emailCooldownSeconds > 0 && (
+            <p className="text-[11px] text-amber-300">メール送信は {emailCooldownSeconds} 秒後に再試行できます。</p>
           )}
           {isLogin && (
             <div className="flex justify-between text-xs text-slate-400 pt-1">
               <button
                 type="button"
                 onClick={handleForgotPassword}
-                disabled={loading}
+                disabled={loading || emailCooldownSeconds > 0}
                 className="hover:text-slate-200 underline underline-offset-2 disabled:opacity-50"
               >
                 パスワードを忘れた
@@ -694,89 +730,13 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
               <button
                 type="button"
                 onClick={handleResendConfirmationEmail}
-                disabled={loading}
+                disabled={loading || emailCooldownSeconds > 0}
                 className="hover:text-slate-200 underline underline-offset-2 disabled:opacity-50"
               >
                 確認メール再送
               </button>
             </div>
           )}
-          {isLogin && (
-            <button
-              type="button"
-              onClick={handleMagicLinkLogin}
-              disabled={loading}
-              className="w-full py-2 text-xs text-slate-400 hover:text-white underline underline-offset-2 disabled:opacity-50"
-            >
-              メールリンクでログイン
-            </button>
-          )}
-          {isLogin && (
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={handleSendOtpCode}
-                disabled={loading}
-                className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2 disabled:opacity-50"
-              >
-                PINコードをメールで受け取る
-              </button>
-              {otpRequested && (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="6桁PIN"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                    className="entry-input flex-1 bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleOtpVerify}
-                    disabled={loading || otpCode.length < 6}
-                    className="px-3 py-2 rounded-xl text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-50"
-                  >
-                    PIN認証
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {isLogin && (
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={handleShowLoginQr}
-                className="w-full py-2 text-xs text-slate-300 hover:text-white underline underline-offset-2"
-              >
-                QRコードでスマホにログイン（LINE不要）
-              </button>
-              {showLoginQr && loginQrImageUrl && (
-                <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 space-y-2">
-                  <p className="text-xs text-slate-300 text-center">スマホのカメラで読み取り</p>
-                  <Image
-                    src={loginQrImageUrl}
-                    alt="スマホログイン用QR"
-                    width={180}
-                    height={180}
-                    unoptimized
-                    className="mx-auto w-44 h-44 rounded-lg bg-white p-2"
-                  />
-                  <p className="text-[10px] text-slate-400 text-center">読み取り後、アプリ上でPINコード認証でログインできます</p>
-                  <button
-                    type="button"
-                    onClick={() => { setShowLoginQr(false); setLoginQrImageUrl(null) }}
-                    className="w-full text-[11px] text-slate-400 hover:text-white underline underline-offset-2"
-                  >
-                    閉じる
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
           {isLogin && lineLoginEnabled && (
             <button
               type="button"
@@ -927,29 +887,53 @@ export default function Home() {
   }
 
   async function handlePasswordChange() {
-    const newPassword = window.prompt("新しいパスワードを入力してください（8文字以上・英字と数字を含む）")
-    if (newPassword === null) return
+    const newPasswordRaw = window.prompt("新しいパスワードを入力してください（小文字・大文字・数字を含む8文字以上、記号は任意）")
+    if (newPasswordRaw === null) return
+    const newPassword = newPasswordRaw.normalize("NFKC").trim()
 
-    if (!isPasswordValid(newPassword)) {
-      alert("パスワードは以下を満たす必要があります：\n・8文字以上\n・英字を含む (A-Z, a-z)\n・数字を含む (0-9)")
+    if (!newPassword) {
+      alert("新しいパスワードを入力してください")
       return
     }
 
-    const confirmPassword = window.prompt("確認のため、新しいパスワードをもう一度入力してください")
-    if (confirmPassword === null) return
+    if (!isPasswordValid(newPassword)) {
+      alert("パスワードは小文字・大文字・数字を含む8文字以上で入力してください（記号は任意、例: Abc12345）")
+      return
+    }
+
+    const confirmPasswordRaw = window.prompt("確認のため、新しいパスワードをもう一度入力してください")
+    if (confirmPasswordRaw === null) return
+    const confirmPassword = confirmPasswordRaw.normalize("NFKC").trim()
+
+    if (!confirmPassword) {
+      alert("確認用パスワードを入力してください")
+      return
+    }
 
     if (newPassword !== confirmPassword) {
       alert("確認用パスワードが一致しません")
       return
     }
 
-    const { error } = await createClient().auth.updateUser({ password: newPassword })
-    if (error) {
-      alert("パスワード変更失敗: " + error.message)
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      alert("セッションが切れています。再ログインしてからもう一度お試しください。ログインできない場合は「パスワードを忘れた」から再設定してください。")
       return
     }
 
-    alert("パスワードを変更しました")
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) {
+      const friendly = toFriendlyAuthErrorMessage(error.message)
+      if (friendly.includes("メールアドレスまたはパスワードが間違っています") || friendly.includes("セッションエラー")) {
+        alert("パスワード変更失敗: " + friendly + "\nログインし直すか、「パスワードを忘れた」から再設定してください。")
+      } else {
+        alert("パスワード変更失敗: " + friendly)
+      }
+      return
+    }
+
+    alert("パスワードを変更しました。次回から新しいパスワードでログインできます。")
   }
 
   // 認証チェック
@@ -959,6 +943,8 @@ export default function Home() {
     let pendingLineOauth = false
     let pendingLineEmail = ""
     let pendingLoginEmail = ""
+    let pendingQrMagicSent = false
+    let pendingQrMagicError: string | null = null
 
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search)
@@ -968,6 +954,8 @@ export default function Home() {
       const lineOauth = params.get("line_oauth")
       const lineEmail = params.get("line_email")
       const loginEmail = params.get("login_email")
+      const qrMagicSent = params.get("qr_magic_sent")
+      const qrError = params.get("qr_error")
       const displayError = authError || oauthErrorDescription || oauthError
 
       if (displayError) {
@@ -985,6 +973,19 @@ export default function Home() {
 
       if (loginEmail) {
         pendingLoginEmail = decodeURIComponent(loginEmail)
+        const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`
+        window.history.replaceState({}, "", cleanUrl)
+      }
+
+      if (qrMagicSent === "1") {
+        pendingQrMagicSent = true
+      }
+
+      if (qrError) {
+        pendingQrMagicError = decodeURIComponent(qrError)
+      }
+
+      if (qrMagicSent === "1" || qrError) {
         const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`
         window.history.replaceState({}, "", cleanUrl)
       }
@@ -1014,6 +1015,16 @@ export default function Home() {
       if (!session?.user && pendingLoginEmail) {
         setAuthPrefillEmail(pendingLoginEmail)
         setShowAuthView(true)
+      }
+
+      if (!session?.user && pendingQrMagicSent) {
+        setShowAuthView(true)
+        setAuthNotice({ type: "success", text: "ログイン用メールリンクを送信しました。スマホのメールを開いてリンクをタップしてください。" })
+      }
+
+      if (!session?.user && pendingQrMagicError) {
+        setShowAuthView(true)
+        setAuthNotice({ type: "error", text: toFriendlyAuthErrorMessage(pendingQrMagicError) })
       }
 
       setUser(session?.user ?? null)
@@ -1053,7 +1064,13 @@ export default function Home() {
     setProfile(profileData)
     setTransactions(txData ?? [])
     setBudgets(budgetData ?? [])
-    setNeedsSetup(!profileData)
+    const hasPresetTargets = Boolean(
+      profileData &&
+      profileData.allocation_target_fixed_rate != null &&
+      profileData.allocation_target_variable_rate != null &&
+      profileData.allocation_target_savings_rate != null
+    )
+    setNeedsSetup(!profileData || !hasPresetTargets)
     setDataLoading(false)
   }, [user])
 
@@ -1174,6 +1191,7 @@ export default function Home() {
           setProfile(nextProfile)
           setNeedsSetup(false)
           setShowAuthView(false)
+          loadData()
         }} />
       </>
     )
@@ -1196,6 +1214,7 @@ export default function Home() {
           onComplete={(nextProfile) => {
             setProfile(nextProfile)
             setShowProfileSettings(false)
+            loadData()
           }}
         />
       </>
@@ -1251,7 +1270,7 @@ export default function Home() {
               </>
             )}
             <button onClick={handlePasswordChange} className="text-xs px-2 py-1.5 bg-slate-800 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">PW変更</button>
-            <button onClick={() => setShowProfileSettings(true)} className="text-xs px-2 py-1.5 bg-slate-800 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">初期設定変更</button>
+            <button onClick={() => setShowProfileSettings(true)} className="text-xs px-2 py-1.5 bg-slate-800 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">配分目標/初期設定</button>
             <button onClick={handleSignOut} className="text-xs px-2 py-1.5 bg-slate-800 rounded-lg text-slate-300 hover:text-white hover:bg-red-600/30 transition-colors">ログアウト</button>
           </div>
         </div>
@@ -1266,7 +1285,13 @@ export default function Home() {
         ) : (
           <>
             {navPage === "dashboard" && (
-              <Dashboard transactions={transactions} budgets={budgets} currentMonth={currentMonth} profile={profile} />
+              <Dashboard
+                transactions={transactions}
+                budgets={budgets}
+                currentMonth={currentMonth}
+                profile={profile}
+                onOpenSetup={() => setShowProfileSettings(true)}
+              />
             )}
             {navPage === "input" && (
               <div className="space-y-4">

@@ -8,6 +8,7 @@ interface Props {
   budgets: Budget[]
   currentMonth: string
   profile: Profile | null
+  onOpenSetup?: () => void
 }
 
 function safeLevel(savingRate: number): { level: string; color: string; bar: number } {
@@ -18,7 +19,7 @@ function safeLevel(savingRate: number): { level: string; color: string; bar: num
   return { level: "D", color: "text-red-400", bar: 20 }
 }
 
-export default function Dashboard({ transactions, budgets, currentMonth, profile }: Props) {
+export default function Dashboard({ transactions, budgets, currentMonth, profile, onOpenSetup }: Props) {
   const [highlightAfterSave, setHighlightAfterSave] = useState(() => {
     if (typeof window === "undefined") return false
     return window.sessionStorage.getItem("kakeibo-just-saved") === "1"
@@ -146,6 +147,37 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
     }
   }, [profile, stats.expense, stats.fixed, stats.income, stats.investment, stats.saving])
 
+  const budgetMonth = useMemo(() => {
+    const inCurrent = budgets.some((b) => b.month === currentMonth)
+    if (inCurrent) return currentMonth
+    const sorted = [...budgets]
+      .map((b) => b.month)
+      .filter(Boolean)
+      .sort((a, b) => b.localeCompare(a))
+    return sorted[0] ?? null
+  }, [budgets, currentMonth])
+
+  const categoryAllocationView = useMemo(() => {
+    if (!budgetMonth) return [] as Array<{ category: string; targetAmount: number; targetPct: number; actualAmount: number; actualPct: number }>
+
+    const targetBudgets = budgets.filter((b) => b.month === budgetMonth)
+    const totalTarget = targetBudgets.reduce((sum, b) => sum + b.amount, 0)
+    const actualExpenseTotal = stats.expense
+
+    return targetBudgets
+      .map((b) => {
+        const actualAmount = stats.categoryMap[b.category] ?? 0
+        return {
+          category: b.category,
+          targetAmount: b.amount,
+          targetPct: totalTarget > 0 ? Math.round((b.amount / totalTarget) * 100) : 0,
+          actualAmount,
+          actualPct: actualExpenseTotal > 0 ? Math.round((actualAmount / actualExpenseTotal) * 100) : 0,
+        }
+      })
+      .sort((a, b) => b.targetAmount - a.targetAmount)
+  }, [budgetMonth, budgets, stats.categoryMap, stats.expense])
+
   const expenseTrend = useMemo(() => {
     const [year, month] = currentMonth.split("-").map(Number)
     const recentMonths = Array.from({ length: 3 }).map((_, index) => {
@@ -242,6 +274,21 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
 
   const { level, color, bar } = safeLevel(stats.savingRate)
 
+  const forecastSavings = useMemo(() => {
+    const monthlySavingsActual = stats.saving + stats.investment
+    const projectedMonthlySavings = forecast.projectedSaving + forecast.projectedInvestment
+    const annualSavingsProjection = projectedMonthlySavings * 12
+    const deficitRiskCount = [stats.balance, forecast.projectedBalance, forecast.avgMonthlyBalance].filter((v) => v < 0).length
+    const deficitRisk = deficitRiskCount >= 2 ? "high" : deficitRiskCount === 1 ? "mid" : "low"
+
+    return {
+      monthlySavingsActual,
+      projectedMonthlySavings,
+      annualSavingsProjection,
+      deficitRisk,
+    }
+  }, [forecast.avgMonthlyBalance, forecast.projectedBalance, forecast.projectedInvestment, forecast.projectedSaving, stats.balance, stats.investment, stats.saving])
+
   const cards = [
     { label: "収入", value: stats.income, color: "from-emerald-500/20 to-emerald-600/5", text: "text-emerald-400" },
     { label: "支出", value: stats.expense, color: "from-red-500/20 to-red-600/5", text: "text-red-400" },
@@ -251,6 +298,78 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
 
   return (
     <div className="space-y-4">
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm text-slate-200 font-semibold">初期設定・配分設定</p>
+            <p className="text-xs text-slate-400 mt-1">
+              目標配分: 固定費 {allocation.fixed.target}% / 変動費 {allocation.variable.target}% / 貯蓄+投資 {allocation.savings.target}%
+            </p>
+          </div>
+          {onOpenSetup && (
+            <button
+              type="button"
+              onClick={onOpenSetup}
+              className="px-3 py-2 rounded-xl text-xs bg-violet-600 hover:bg-violet-500 text-white"
+            >
+              設定を開く
+            </button>
+          )}
+        </div>
+      </div>
+
+      {(stats.budgetProgress.length === 0 || !profile?.allocation_take_home) && (
+        <div className="bg-amber-900/20 border border-amber-700/40 rounded-2xl p-4">
+          <p className="text-sm text-amber-200 font-semibold">初期設定が未完了です</p>
+          <p className="text-xs text-amber-100/90 mt-1">
+            配分プリセットとカテゴリ配分を設定すると、予算ボードに自動反映されます。
+          </p>
+          {onOpenSetup && (
+            <button
+              type="button"
+              onClick={onOpenSetup}
+              className="mt-3 px-3 py-2 rounded-xl text-xs bg-amber-600 hover:bg-amber-500 text-white"
+            >
+              初期設定を開く
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-300">📚 カテゴリ配分（目標 vs 実績）</h3>
+          <span className="text-xs text-slate-500">{budgetMonth ? `${budgetMonth}基準` : "未設定"}</span>
+        </div>
+
+        {categoryAllocationView.length === 0 ? (
+          <p className="text-xs text-slate-400">カテゴリ配分が未設定です。「設定を開く」から初期設定でカテゴリ配分を作成してください。</p>
+        ) : (
+          <div className="space-y-2">
+            {categoryAllocationView.slice(0, 9).map((row) => {
+              const diff = row.actualPct - row.targetPct
+              const over = diff > 0
+              return (
+                <div key={row.category} className="rounded-xl border border-slate-700 bg-slate-900/40 p-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-300">{row.category}</span>
+                    <span className={over ? "text-orange-300" : "text-emerald-300"}>
+                      目標 {row.targetPct}% / 実績 {row.actualPct}%
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-violet-500" style={{ width: `${Math.min(row.targetPct, 100)}%` }} />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    目標 {formatCurrency(row.targetAmount)} ・ 実績 {formatCurrency(row.actualAmount)}{over ? `（+${diff}%超過）` : ""}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* 基本4指標 */}
       <div className="grid grid-cols-2 gap-3">
         {cards.map((c, index) => (
@@ -423,6 +542,19 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
               : `年間で黒字見込み ${formatCurrency(forecast.annualProjection)}`}
           </p>
           <p className="text-xs text-slate-400 mt-1">平均月次収支: {formatCurrency(forecast.avgMonthlyBalance)}</p>
+        </div>
+
+        <div className={`rounded-xl border p-3 ${forecastSavings.annualSavingsProjection <= 0 ? "border-red-500/40 bg-red-900/20" : "border-sky-500/30 bg-sky-900/20"}`}>
+          <p className="text-xs text-slate-300 mb-1">将来貯金予測</p>
+          <p className={`text-sm font-semibold ${forecastSavings.annualSavingsProjection <= 0 ? "text-red-300" : "text-sky-300"}`}>
+            12か月の貯金+投資見込み {formatCurrency(forecastSavings.annualSavingsProjection)}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            今月実績 {formatCurrency(forecastSavings.monthlySavingsActual)} / 月末見込み {formatCurrency(forecastSavings.projectedMonthlySavings)}
+          </p>
+          <p className={`text-xs mt-1 ${forecastSavings.deficitRisk === "high" ? "text-red-300" : forecastSavings.deficitRisk === "mid" ? "text-amber-300" : "text-emerald-300"}`}>
+            赤字リスク判定: {forecastSavings.deficitRisk === "high" ? "高" : forecastSavings.deficitRisk === "mid" ? "中" : "低"}
+          </p>
         </div>
       </div>
 

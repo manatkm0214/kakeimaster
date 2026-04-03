@@ -66,6 +66,12 @@ export default function PresetSetup({ onComplete, initialProfile = null, onCance
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null)
 
+  const strategyLabel = useMemo(() => {
+    if (accentPreset === "balanced") return "経済標準/バランス"
+    if (accentPreset === "defense") return "物価高対策/守り重視"
+    return "赤字改善/成長重視"
+  }, [accentPreset])
+
   const rateTotal = useMemo(() => {
     return [fixedRate, variableRate, savingsRate].reduce((sum, value) => sum + Number(value || 0), 0)
   }, [fixedRate, savingsRate, variableRate])
@@ -289,11 +295,11 @@ export default function PresetSetup({ onComplete, initialProfile = null, onCance
             </button>
           )}
         </div>
-        <p className="text-sm text-slate-400">表示名と手取りの目標配分を決めると、ダッシュボードにすぐ反映されます。</p>
+        <p className="text-sm text-slate-400">最初に「配分プリセット」から目標を選択してください。選択内容は下の現在値に即時反映されます。</p>
 
         <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 space-y-2">
           <p className="text-xs font-semibold text-slate-200">配分プリセット（まずここを選択）</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => applyPreset("balanced")} className={`py-2 text-[11px] bg-slate-900 border rounded-xl ${accentPreset === "balanced" ? "border-violet-500 text-violet-300" : "border-slate-700 hover:border-violet-500"}`}>
               経済標準/バランス
             </button>
@@ -303,10 +309,19 @@ export default function PresetSetup({ onComplete, initialProfile = null, onCance
             <button type="button" onClick={() => applyPreset("growth")} className={`py-2 text-[11px] bg-slate-900 border rounded-xl ${accentPreset === "growth" ? "border-amber-500 text-amber-300" : "border-slate-700 hover:border-amber-500"}`}>
               赤字改善/成長重視
             </button>
+            <button type="button" onClick={applyCustomMode} className="py-2 text-[11px] bg-slate-900 border border-cyan-600 rounded-xl text-cyan-300 hover:border-cyan-400">
+              カスタム（自由入力）
+            </button>
           </div>
           <p className="text-[11px] text-slate-500">
             余裕あり: 経済標準/バランス ・ 余裕が薄い: 物価高対策/守り重視 ・ 余裕がない: 赤字改善/成長重視
           </p>
+        </div>
+
+        <div className="rounded-xl border border-violet-700/40 bg-violet-900/10 p-3 space-y-1">
+          <p className="text-xs font-semibold text-violet-200">現在の配分目標</p>
+          <p className="text-[11px] text-slate-300">選択モード: {strategyLabel}</p>
+          <p className="text-[11px] text-slate-300">固定費 {fixedRate}% ・ 変動費 {variableRate}% ・ 貯蓄+投資 {savingsRate}%</p>
         </div>
 
         <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 space-y-2">
@@ -456,14 +471,6 @@ export default function PresetSetup({ onComplete, initialProfile = null, onCance
             </div>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={applyCustomMode}
-          className="w-full py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl hover:border-cyan-500 text-cyan-300"
-        >
-          カスタムモード（配分を自由入力）
-        </button>
 
         <div className="grid grid-cols-3 gap-2">
           <button type="button" onClick={() => applyAccent("balanced")} className={`py-2 text-[11px] rounded-xl border ${accentPreset === "balanced" ? "bg-violet-600/20 border-violet-500" : "bg-slate-900 border-slate-700"}`}>
