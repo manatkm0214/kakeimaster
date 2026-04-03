@@ -7,15 +7,7 @@ import { createClient } from "@/lib/supabase/client"
 
 function validatePassword(password: string): { ok: boolean; reason: string } {
   const normalized = password.normalize("NFKC").trim()
-  const hasLowercase = /[a-z]/.test(normalized)
-  const hasUppercase = /[A-Z]/.test(normalized)
-  const hasNumbers = /[0-9]/.test(normalized)
-  const isLongEnough = normalized.length >= 8
-
-  if (!isLongEnough) return { ok: false, reason: "8文字以上で入力してください" }
-  if (!hasLowercase) return { ok: false, reason: "小文字を1文字以上含めてください" }
-  if (!hasUppercase) return { ok: false, reason: "大文字を1文字以上含めてください" }
-  if (!hasNumbers) return { ok: false, reason: "数字を1文字以上含めてください" }
+  if (normalized.length < 8) return { ok: false, reason: "8文字以上で入力してください" }
   return { ok: true, reason: "" }
 }
 
@@ -162,7 +154,7 @@ export default function ResetPasswordPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5"
-            placeholder="8文字以上・小文字/大文字/数字（記号は任意）"
+            placeholder="8文字以上（何でもOK）"
           />
         </label>
 

@@ -14,20 +14,8 @@ import AIAnalysis from "@/lib/components/AIAnalysis"
 import AnnualReport from "@/lib/components/AnnualReport"
 import PresetSetup from "@/lib/components/PresetSetup"
 
-function validatePassword(pwd: string) {
-  const normalized = pwd.normalize("NFKC").trim()
-  const hasLowercase = /[a-z]/.test(normalized)
-  const hasUppercase = /[A-Z]/.test(normalized)
-  const hasNumbers = /[0-9]/.test(normalized)
-  const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};':"|<>?,./`~]/.test(normalized)
-  const isLongEnough = normalized.length >= 8
-  const meetsRule = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(normalized)
-  return { hasLowercase, hasUppercase, hasNumbers, hasSymbols, isLongEnough, meetsRule }
-}
-
 function isPasswordValid(pwd: string): boolean {
-  const { meetsRule } = validatePassword(pwd)
-  return meetsRule
+  return pwd.normalize("NFKC").trim().length >= 8
 }
 
 function toFriendlyAuthErrorMessage(raw: string): string {
@@ -442,7 +430,7 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
 
     if (!normalizedEmail || !password) { setSignupMessage({ type: "error", text: "メールアドレスとパスワードを入力してください" }); return }
     if (!isLogin && !isPasswordValid(normalizedPassword)) {
-      setSignupMessage({ type: "error", text: "パスワードは小文字・大文字・数字を含む8文字以上で入力してください（記号は任意、例: Abc12345）" })
+      setSignupMessage({ type: "error", text: "パスワードは8文字以上で入力してください" })
       return
     }
     if (!isLogin && !ensureEmailSendAvailable()) return
@@ -513,10 +501,10 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
         let message = error.message || "不明なエラーが発生しました"
         if (message.includes("Invalid API key") || message.includes("invalid_api_key")) message = "Supabaseの設定に問題があります。管理者にお問い合わせください。"
         if (message.includes("Password should")) {
-          message = `パスワード形式が要件を満たしていません。小文字・大文字・数字を含む8文字以上（記号は任意、例: Abc12345）で再試行してください。\n詳細: ${error.message}`
+          message = `パスワードは8文字以上で設定してください。\n詳細: ${error.message}`
         }
         if (message.includes("invalid email")) message = "有効なメールアドレスを入力してください"
-        if (message.includes("validation failed")) message = "入力内容を確認してください。特にパスワードは小文字・大文字・数字を含む8文字以上で入力してください（記号は任意、例: Abc12345）"
+        if (message.includes("validation failed")) message = "入力内容を確認してください。パスワードは8文字以上で入力してください"
         setSignupMessage({ type: "error", text: toFriendlyAuthErrorMessage(message) })
         return
       }
@@ -677,30 +665,11 @@ function AuthView({ onAuth, onBack, initialMessage, initialEmail }: { onAuth: (n
               className="entry-input w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400"
             />
             {!isLogin && password && (
-              <div className="text-xs text-slate-400 mt-2 space-y-1">
-                {(() => {
-                  const { hasLowercase, hasUppercase, hasNumbers, hasSymbols, isLongEnough, meetsRule } = validatePassword(password)
-                  const allValid = meetsRule
-                  return (
-                    <>
-                      <p className={allValid ? "text-emerald-400" : ""}>
-                        <span>{isLongEnough ? "✓" : "✕"} 8文字以上 ({password.length}文字)</span>
-                      </p>
-                      <p className={hasLowercase ? "text-emerald-400" : ""}>
-                        <span>{hasLowercase ? "✓" : "✕"} 小文字を含む (a-z)</span>
-                      </p>
-                      <p className={hasUppercase ? "text-emerald-400" : ""}>
-                        <span>{hasUppercase ? "✓" : "✕"} 大文字を含む (A-Z)</span>
-                      </p>
-                      <p className={hasNumbers ? "text-emerald-400" : ""}>
-                        <span>{hasNumbers ? "✓" : "✕"} 数字を含む (0-9)</span>
-                      </p>
-                      <p className={hasSymbols ? "text-emerald-400" : ""}>
-                        <span>{hasSymbols ? "✓" : "✕"} 記号を含む (!@#$...)</span>
-                      </p>
-                    </>
-                  )
-                })()}
+              <div className="text-xs mt-2">
+                {password.normalize("NFKC").trim().length >= 8
+                  ? <p className="text-emerald-400">✓ OK（{password.length}文字）</p>
+                  : <p className="text-slate-400">✕ あと{8 - password.normalize("NFKC").trim().length}文字必要</p>
+                }
               </div>
             )}
           </div>
@@ -887,7 +856,7 @@ export default function Home() {
   }
 
   async function handlePasswordChange() {
-    const newPasswordRaw = window.prompt("新しいパスワードを入力してください（小文字・大文字・数字を含む8文字以上、記号は任意）")
+    const newPasswordRaw = window.prompt("新しいパスワードを入力してください（8文字以上）")
     if (newPasswordRaw === null) return
     const newPassword = newPasswordRaw.normalize("NFKC").trim()
 
@@ -897,7 +866,7 @@ export default function Home() {
     }
 
     if (!isPasswordValid(newPassword)) {
-      alert("パスワードは小文字・大文字・数字を含む8文字以上で入力してください（記号は任意、例: Abc12345）")
+      alert("パスワードは8文字以上で入力してください")
       return
     }
 
