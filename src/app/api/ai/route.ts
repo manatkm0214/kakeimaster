@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
 
+type AnthropicTextBlock = {
+  text?: string
+}
+
+type AnthropicResponse = {
+  content?: AnthropicTextBlock[]
+  error?: {
+    message?: string
+  }
+  message?: string
+}
+
 export async function POST(req: NextRequest) {
   const { type, data } = await req.json()
+
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
+  const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-3-5-haiku-latest"
+  if (!apiKey) {
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY が未設定です" }, { status: 500 })
+  }
 
   let prompt = ""
 
@@ -70,22 +88,47 @@ export async function POST(req: NextRequest) {
 }`
   }
 
+  if (!prompt) {
+    return NextResponse.json({ error: "不正なリクエスト種別です" }, { status: 400 })
+  }
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY!,
+      "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
+      model,
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     }),
   })
 
-  const result = await response.json()
-  const text = result.content?.[0]?.text ?? ""
+  const raw = await response.text()
+  let result: AnthropicResponse | null = null
+  try {
+    result = raw ? JSON.parse(raw) : null
+  } catch {
+    return NextResponse.json({ error: "AI応答の解析に失敗しました" }, { status: 502 })
+  }
+
+  if (!response.ok) {
+    const message = result?.error?.message || result?.message || "AI呼び出しに失敗しました"
+    return NextResponse.json({ error: message }, { status: response.status })
+  }
+
+  const text = Array.isArray(result?.content)
+    ? result.content
+        .map((block) => (typeof block?.text === "string" ? block.text : ""))
+        .join("\n")
+        .trim()
+    : ""
+
+  if (!text) {
+    return NextResponse.json({ error: "AIから有効な回答が返りませんでした" }, { status: 502 })
+  }
 
   return NextResponse.json({ result: text })
 }

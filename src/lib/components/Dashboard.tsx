@@ -330,7 +330,36 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
     return stats.saving + stats.investment
   }, [monthlySavingsGoal, stats.investment, stats.reserveStock, stats.saving])
 
-  const defenseMonthlyBase = defenseBasis === "fixed" && stats.fixed > 0 ? stats.fixed : stats.expense
+  const expenseBaseline = useMemo(() => {
+    if (stats.expense > 0) return stats.expense
+
+    const [year, month] = currentMonth.split("-").map(Number)
+    const months = Array.from({ length: 3 }).map((_, index) => {
+      const d = new Date(year, month - 1 - index, 1)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    })
+
+    const history = months
+      .map((m) => transactions
+        .filter((t) => t.type === "expense" && t.date.startsWith(m))
+        .reduce((sum, t) => sum + t.amount, 0)
+      )
+      .filter((v) => v > 0)
+
+    if (history.length > 0) {
+      return Math.round(history.reduce((sum, v) => sum + v, 0) / history.length)
+    }
+
+    if ((profile?.allocation_take_home ?? 0) > 0) {
+      return Math.round((profile!.allocation_take_home as number) * 0.6)
+    }
+
+    return 100000
+  }, [currentMonth, profile, stats.expense, transactions])
+
+  const defenseMonthlyBase = defenseBasis === "fixed"
+    ? (stats.fixed > 0 ? stats.fixed : Math.round(expenseBaseline * 0.5))
+    : expenseBaseline
   const defenseMinimum = Math.round(defenseMonthlyBase * 3)
   const defenseTarget = Math.round(defenseMonthlyBase * 6)
   const defenseShortfall = Math.max(0, defenseTarget - defenseFund)
@@ -715,6 +744,7 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
         <p className="text-xs text-slate-400">
           目安: {defenseBasis === "expense" ? "総支出" : "固定費"}の3〜6か月分（最低 {formatCurrency(defenseMinimum)} / 推奨 {formatCurrency(defenseTarget)}）
         </p>
+        <p className="text-[11px] text-slate-500">基準月額: {formatCurrency(defenseMonthlyBase)}</p>
         <p className={`text-sm font-semibold ${defenseShortfall > 0 ? "text-amber-300" : "text-emerald-300"}`}>
           現在 {formatCurrency(defenseFund)} / 不足 {formatCurrency(defenseShortfall)}
         </p>

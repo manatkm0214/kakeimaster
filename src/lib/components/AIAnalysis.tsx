@@ -286,11 +286,18 @@ export default function AIAnalysis({ transactions, budgets, currentMonth, profil
           },
         }),
       })
-      const { result } = await res.json()
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload?.error || "分析に失敗しました")
+      }
+      const result = payload?.result
+      if (typeof result !== "string" || !result.trim()) {
+        throw new Error("AIから回答が返りませんでした")
+      }
       const parsed = JSON.parse(result.replace(/```json|```/g, "").trim())
       setAnalysis(parsed)
-    } catch {
-      alert("分析に失敗しました")
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "分析に失敗しました")
     } finally {
       setLoading(false)
     }
@@ -308,11 +315,18 @@ export default function AIAnalysis({ transactions, budgets, currentMonth, profil
           data: { goal, income: stats.income, fixedExpenses: stats.fixed, variableExpenses: stats.variable },
         }),
       })
-      const { result } = await res.json()
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload?.error || "プラン生成に失敗しました")
+      }
+      const result = payload?.result
+      if (typeof result !== "string" || !result.trim()) {
+        throw new Error("AIから回答が返りませんでした")
+      }
       const parsed = JSON.parse(result.replace(/```json|```/g, "").trim())
       setSavingsPlan(parsed)
-    } catch {
-      alert("プラン生成に失敗しました")
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "プラン生成に失敗しました")
     } finally {
       setSavingLoading(false)
     }
