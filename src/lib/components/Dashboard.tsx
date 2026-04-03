@@ -49,6 +49,11 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
     if (raw === 1 || raw === 1000 || raw === 10000) return raw
     return 10000
   })
+  const [defenseBasis, setDefenseBasis] = useState<"expense" | "fixed">(() => {
+    if (typeof window === "undefined") return "expense"
+    const saved = window.localStorage.getItem("kakeibo-defense-basis")
+    return saved === "fixed" ? "fixed" : "expense"
+  })
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -59,6 +64,11 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
     if (typeof window === "undefined") return
     window.localStorage.setItem("kakeibo-money-unit", String(moneyUnit))
   }, [moneyUnit])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem("kakeibo-defense-basis", defenseBasis)
+  }, [defenseBasis])
 
   useEffect(() => {
     if (typeof window === "undefined" || !highlightAfterSave) return
@@ -291,8 +301,9 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
 
   const { level, color, bar } = safeLevel(stats.savingRate)
 
-  const defenseMinimum = Math.round(stats.expense * 3)
-  const defenseTarget = Math.round(stats.expense * 6)
+  const defenseMonthlyBase = defenseBasis === "fixed" && stats.fixed > 0 ? stats.fixed : stats.expense
+  const defenseMinimum = Math.round(defenseMonthlyBase * 3)
+  const defenseTarget = Math.round(defenseMonthlyBase * 6)
   const defenseShortfall = Math.max(0, defenseTarget - stats.defenseFund)
   const defenseProgress = defenseTarget > 0 ? Math.min(100, Math.round((stats.defenseFund / defenseTarget) * 100)) : 0
 
@@ -639,9 +650,27 @@ export default function Dashboard({ transactions, budgets, currentMonth, profile
       </div>
 
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-2">
-        <h3 className="text-sm font-semibold text-slate-300">🛡 防衛資金目安</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-300">🛡 防衛資金目安</h3>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => setDefenseBasis("expense")}
+              className={`px-2 py-1 rounded-lg text-[11px] border ${defenseBasis === "expense" ? "bg-violet-600 border-violet-500 text-white" : "border-slate-700 text-slate-300"}`}
+            >
+              総支出基準
+            </button>
+            <button
+              type="button"
+              onClick={() => setDefenseBasis("fixed")}
+              className={`px-2 py-1 rounded-lg text-[11px] border ${defenseBasis === "fixed" ? "bg-violet-600 border-violet-500 text-white" : "border-slate-700 text-slate-300"}`}
+            >
+              固定費基準
+            </button>
+          </div>
+        </div>
         <p className="text-xs text-slate-400">
-          目安: 生活費の3〜6か月分（最低 {formatCurrency(defenseMinimum)} / 推奨 {formatCurrency(defenseTarget)}）
+          目安: {defenseBasis === "expense" ? "総支出" : "固定費"}の3〜6か月分（最低 {formatCurrency(defenseMinimum)} / 推奨 {formatCurrency(defenseTarget)}）
         </p>
         <p className={`text-sm font-semibold ${defenseShortfall > 0 ? "text-amber-300" : "text-emerald-300"}`}>
           現在 {formatCurrency(stats.defenseFund)} / 不足 {formatCurrency(defenseShortfall)}
