@@ -1,5 +1,6 @@
 import React from "react";
 import { useCharacterImage } from "../hooks/useCharacterImage";
+import { useBgTheme } from "../hooks/useBgTheme";
 
 interface WelcomeViewProps {
   onStartAuth: () => void;
@@ -7,9 +8,10 @@ interface WelcomeViewProps {
 
 const WelcomeView: React.FC<WelcomeViewProps> = ({ onStartAuth }) => {
   const { characterUrl, characterName } = useCharacterImage();
+  useBgTheme(); // 背景変更をリッスンしてCSS変数に即時反映
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center py-12 px-4 relative overflow-hidden bg-linear-to-br from-pink-50 via-violet-50 to-yellow-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div className="min-h-screen flex flex-col items-center justify-center py-12 px-4 relative overflow-hidden" style={{ background: "var(--background)" }}>
 
       {/* 背景きらきら */}
       <div className="absolute inset-0 pointer-events-none" aria-hidden>

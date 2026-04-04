@@ -39,6 +39,10 @@ export default function RootLayout({
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      {/* 背景テーマをReact hydration前に適用してフラッシュを防ぐ */}
+      <head>
+        <script dangerouslySetInnerHTML={{__html: `(function(){try{var bg=localStorage.getItem('kakeibo-custom-bg');if(bg)document.documentElement.style.setProperty('--background',bg);}catch(e){}})()`}} />
+      </head>
       <body className="min-h-full flex flex-col">
         {/* ロゴ画像ヘッダー（localStorage対応） */}
         <Header />

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { FaLine, FaEnvelope, FaLock } from "react-icons/fa";
 import { useCharacterImage } from "../hooks/useCharacterImage";
+import { useBgTheme } from "../hooks/useBgTheme";
 
 interface AuthViewProps {
   onAuth: (mode?: 'login' | 'register') => void;
@@ -17,12 +18,12 @@ const AuthView: React.FC<AuthViewProps> = ({ onAuth, onBack, initialMessage, ini
   const [showLineQR, setShowLineQR] = useState(false);
   const [mode, setMode] = useState<'login' | 'register'>("login");
   const { characterUrl, characterName } = useCharacterImage();
+  useBgTheme(); // 背景変更をリッスンしてCSS変数に即時反映
 
-  // propsで明示的に渡された場合はそれを優先、なければlocalStorageから
   const displayUrl = idolImageUrl || characterUrl;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center py-12 px-4 bg-linear-to-br from-pink-100 via-purple-100 to-yellow-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative overflow-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-center py-12 px-4 relative overflow-hidden" style={{ background: "var(--background)" }}>
 
       {/* 浮遊キャラクター（背景） */}
       {displayUrl && (
