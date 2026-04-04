@@ -1,4 +1,12 @@
 import React, { useState, useEffect } from "react";
+
+function friendlyError(msg: string): string {
+  if (msg.includes("rate limit") || msg.includes("Rate limit")) return "メール送信の上限に達しました。しばらく待ってから再試行してください（約1時間）。または、Supabaseダッシュボードのレート制限設定を確認してください。";
+  if (msg.includes("Invalid login credentials")) return "メールアドレスまたはパスワードが間違っています";
+  if (msg.includes("Email not confirmed")) return "メールアドレスの確認が完了していません。確認メールをご確認ください。";
+  if (msg.includes("User already registered")) return "このメールアドレスは既に登録されています。ログインしてください。";
+  return msg;
+}
 import { FaLine, FaEnvelope, FaLock } from "react-icons/fa";
 import { useCharacterImage } from "../hooks/useCharacterImage";
 import { useBgTheme } from "../hooks/useBgTheme";
@@ -44,7 +52,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onAuth, onBack, initialMessage, ini
         // パスワードなし登録 → マジックリンク送信
         const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
         setAuthLoading(false);
-        if (error) { setLocalNotice({ type: "error", text: error.message }); return; }
+        if (error) { setLocalNotice({ type: "error", text: friendlyError(error.message) }); return; }
         setLocalNotice({ type: "success", text: `✅ ${email} にログインリンクを送信しました。メールを開いてリンクをタップしてください。` });
         return;
       }
