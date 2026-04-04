@@ -5,8 +5,9 @@ import { Transaction } from "@/lib/utils"
 import Charts from "./Charts"
 
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import Image from "next/image"
+import { useCharacterImage } from "../hooks/useCharacterImage"
 
 const mascotsByMode = {
   normal: [
@@ -77,13 +78,18 @@ const mascotsByMode = {
 type Provider = "openai" | "gemini"
 
 export default function AIAnalysis({ transactions, currentMonth }: { transactions: Transaction[]; currentMonth: string }) {
-  // キャラクター画像・名前をlocalStorageから取得（なければ仮画像・空文字）
-  const mascotImg = typeof window !== "undefined"
-    ? window.localStorage.getItem("ai-image-url") || "https://chatgpt.com/s/m_69d0a4bfff3c8191b21b59365dcca6e6"
-    : "https://chatgpt.com/s/m_69d0a4bfff3c8191b21b59365dcca6e6";
-  const mascotName = typeof window !== "undefined"
-    ? window.localStorage.getItem("ai-image-name") || ""
-    : "";
+  const { characterUrl, characterName } = useCharacterImage()
+
+  const [mode, setMode] = useState<"normal" | "kids" | "senior">("normal")
+  const [mascot, setMascot] = useState<string>(mascotsByMode.normal[0].key)
+  const [mascotLine, setMascotLine] = useState<string>(mascotsByMode.normal[0].lines[0])
+
+  const randomLine = useCallback(() => {
+    const modeList = mascotsByMode[mode]
+    const found = modeList.find(m => m.key === mascot) || modeList[0]
+    return found.lines[Math.floor(Math.random() * found.lines.length)]
+  }, [mode, mascot])
+
   const [provider, setProvider] = useState<Provider>("openai")
   const [analysisType, setAnalysisType] = useState<"analysis" | "saving" | "advice">("analysis")
   const [result, setResult] = useState<string>("")
@@ -167,12 +173,16 @@ export default function AIAnalysis({ transactions, currentMonth }: { transaction
         </div>
         {/* キャラクター選択UIは非表示化（自由設定のみ） */}
 
-        {/* キャラクター画像・名前（自由設定） */}
+        {/* キャラクター画像・名前 */}
         <div className="flex items-center gap-3 bg-slate-900/80 rounded-xl p-3 border border-pink-400/40">
-          <Image src={mascotImg} alt={mascotName || "AI画像"} width={48} height={48} className="w-12 h-12 rounded-full border-2 border-pink-300 bg-white" unoptimized />
+          {characterUrl ? (
+            <Image src={characterUrl} alt={characterName || "キャラクター"} width={48} height={48} className="w-12 h-12 rounded-full object-cover border-2 border-pink-300 bg-white" unoptimized />
+          ) : (
+            <div className="w-12 h-12 rounded-full border-2 border-pink-300 bg-slate-800 flex items-center justify-center text-xl">🤖</div>
+          )}
           <div>
-            <div className="font-bold text-pink-200 text-sm mb-1">{mascotName || "AI"}のひとこと</div>
-            <div className="text-pink-100 text-xs">AIがあなたを応援します！</div>
+            <div className="font-bold text-pink-200 text-sm mb-1">{characterName || "AI"}のひとこと</div>
+            <div className="text-pink-100 text-xs">{mascotLine}</div>
           </div>
         </div>
 
