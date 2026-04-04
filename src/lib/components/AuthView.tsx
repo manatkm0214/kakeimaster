@@ -197,6 +197,13 @@ const AuthView: React.FC<AuthViewProps> = ({ onAuth, onBack, initialMessage, ini
           className="mt-2 px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-slate-300 rounded-xl w-full font-bold shadow hover:bg-gray-300 dark:hover:bg-slate-600 transition">
           戻る
         </button>
+
+        {/* 利用規約・プライバシー・問い合わせリンク */}
+        <div className="flex flex-wrap gap-2 justify-center mt-4 text-xs">
+          <a href="/privacy" className="underline text-slate-500 hover:text-emerald-500">プライバシー</a>
+          <a href="/terms" className="underline text-slate-500 hover:text-emerald-500">利用規約</a>
+          <a href="/contact" className="underline text-slate-500 hover:text-emerald-500">お問い合わせ</a>
+        </div>
       </div>
     </div>
   );

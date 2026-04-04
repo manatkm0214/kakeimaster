@@ -97,6 +97,7 @@ export default function AIAnalysis({ transactions, currentMonth }: { transaction
   const [error, setError] = useState("")
 
 
+
   async function handleAnalysis() {
     setLoading(true)
     setError("")
@@ -119,12 +120,17 @@ export default function AIAnalysis({ transactions, currentMonth }: { transaction
           data = transactions.filter(t => t.date.slice(0, 7) === currentMonth)
         }
       }
+      // analysisType値をAPIのtype値に変換
+      let apiType: string = analysisType
+      if (analysisType === "saving") apiType = "savings_plan"
+      if (analysisType === "advice") apiType = "life_advice"
+
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider,
-          type: analysisType,
+          type: apiType,
           data,
           mode,
         }),

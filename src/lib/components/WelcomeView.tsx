@@ -55,6 +55,7 @@ const WelcomeView: React.FC<WelcomeViewProps> = ({ onStartAuth }) => {
         <h1 className="text-3xl font-extrabold text-pink-500 dark:text-violet-300 drop-shadow leading-tight">
           きらきら家計簿
         </h1>
+        {/* アカウント登録画面でのみゲストモード案内を表示（通常は非表示） */}
         <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs">
           自分だけのキャラクターと一緒に、楽しく家計管理しよう！
         </p>
@@ -64,15 +65,23 @@ const WelcomeView: React.FC<WelcomeViewProps> = ({ onStartAuth }) => {
           onClick={onStartAuth}
           className="mt-2 px-8 py-3 bg-linear-to-r from-pink-400 to-violet-400 text-white rounded-full font-bold shadow-lg hover:from-pink-500 hover:to-violet-500 transition text-base"
         >
-          ログイン・新規登録
+          アカウント登録・ログイン
         </button>
 
-        <a
-          href="/settings"
-          className="text-xs text-pink-400 dark:text-violet-400 underline underline-offset-2 hover:text-pink-600 dark:hover:text-violet-300 transition"
-        >
-          🎨 キャラクター設定
-        </a>
+        <div className="flex flex-col gap-1 mt-2">
+          <a
+            href="/settings"
+            className="text-xs text-pink-400 dark:text-violet-400 underline underline-offset-2 hover:text-pink-600 dark:hover:text-violet-300 transition"
+          >
+            🎨 キャラクター名・画像設定
+          </a>
+          <a
+            href="/settings"
+            className="text-xs text-pink-400 dark:text-violet-400 underline underline-offset-2 hover:text-pink-600 dark:hover:text-violet-300 transition"
+          >
+            🖼️ 背景テーマ設定
+          </a>
+        </div>
       </div>
     </div>
   );

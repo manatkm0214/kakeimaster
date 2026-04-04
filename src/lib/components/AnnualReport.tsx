@@ -308,7 +308,7 @@ export default function AnnualReport({ transactions, currentMonth }: Props) {
 
   return (
     <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-2">
-      {/* キャラクター選択・吹き出し */}
+      {/* モード切替＋子供・高齢者入力欄を上部に */}
       <div className="col-span-1 md:col-span-2 mb-2">
         <div className="flex gap-3 items-center flex-wrap mb-2">
           <span className="text-slate-300 font-bold">モード:</span>
@@ -330,6 +330,52 @@ export default function AnnualReport({ transactions, currentMonth }: Props) {
             >{m.label}</button>
           ))}
         </div>
+        {/* 子供・高齢者入力欄をここに移動 */}
+        {mode === "kids" && (
+          <div className="bg-yellow-900/20 border border-yellow-400/40 rounded-xl p-3 mb-2">
+            <div className="font-bold text-yellow-200 mb-1">🧒 おこづかい帳 簡易入力</div>
+            <div className="flex gap-2 items-end mb-1">
+              <div>
+                <label className="text-xs text-yellow-200">おこづかい追加</label>
+                <input type="number" min="1" value={kidsInput.income} onChange={e=>setKidsInput(i=>({...i,income:e.target.value}))} className="ml-1 px-2 py-1 rounded bg-yellow-50 text-yellow-900 w-24" />
+                <button onClick={()=>handleKidsAdd("income")} className="ml-1 px-2 py-1 rounded bg-emerald-500 text-white">追加</button>
+              </div>
+              <div>
+                <label className="text-xs text-yellow-200">使った</label>
+                <input type="number" min="1" value={kidsInput.expense} onChange={e=>setKidsInput(i=>({...i,expense:e.target.value}))} className="ml-1 px-2 py-1 rounded bg-yellow-50 text-yellow-900 w-24" />
+                <button onClick={()=>handleKidsAdd("expense")} className="ml-1 px-2 py-1 rounded bg-red-500 text-white">記録</button>
+              </div>
+              <button onClick={handleKidsReset} className="ml-2 px-2 py-1 rounded bg-yellow-500 text-white text-xs">リセット</button>
+            </div>
+            <div className="text-xs text-yellow-100 mt-1">※簡易入力はページ再読込で反映・リセットボタンで初期化できます</div>
+            <div className="text-xs text-yellow-200 mt-1">おこづかい帳は「もらった」「つかった」を記録して、のこりを確認できるよ！<br/>おかねはたいせつに、すこしずつためてみよう！</div>
+          </div>
+        )}
+        {mode === "senior" && (
+          <div className="bg-blue-900/20 border border-blue-400/40 rounded-xl p-3 mb-2">
+            <div className="font-bold text-blue-200 mb-1">👴 高齢者向け 簡易入力</div>
+            <div className="flex gap-2 items-end mb-1">
+              <div>
+                <label className="text-xs text-blue-200">医療費</label>
+                <input type="number" min="1" value={seniorInput.medical} onChange={e=>setSeniorInput(i=>({...i,medical:e.target.value}))} className="ml-1 px-2 py-1 rounded bg-blue-50 text-blue-900 w-24" />
+                <button onClick={()=>handleSeniorAdd("medical")} className="ml-1 px-2 py-1 rounded bg-pink-500 text-white">追加</button>
+              </div>
+              <div>
+                <label className="text-xs text-blue-200">年金</label>
+                <input type="number" min="1" value={seniorInput.pension} onChange={e=>setSeniorInput(i=>({...i,pension:e.target.value}))} className="ml-1 px-2 py-1 rounded bg-blue-50 text-blue-900 w-24" />
+                <button onClick={()=>handleSeniorAdd("pension")} className="ml-1 px-2 py-1 rounded bg-emerald-500 text-white">追加</button>
+              </div>
+              <div>
+                <label className="text-xs text-blue-200">生活費</label>
+                <input type="number" min="1" value={seniorInput.living} onChange={e=>setSeniorInput(i=>({...i,living:e.target.value}))} className="ml-1 px-2 py-1 rounded bg-blue-50 text-blue-900 w-24" />
+                <button onClick={()=>handleSeniorAdd("living")} className="ml-1 px-2 py-1 rounded bg-blue-500 text-white">追加</button>
+              </div>
+              <button onClick={handleSeniorReset} className="ml-2 px-2 py-1 rounded bg-blue-500 text-white text-xs">リセット</button>
+            </div>
+            <div className="text-xs text-blue-100 mt-1">※簡易入力はページ再読込で反映・リセットボタンで初期化できます</div>
+            <div className="text-xs text-blue-200 mt-1">医療費・年金・生活費を記録して、毎月の支出や収入を見える化できます。<br/>健康や生活の安心のために、定期的に記録しましょう。</div>
+          </div>
+        )}
         <div className="flex gap-3 items-center flex-wrap mb-2">
           <span className="text-slate-300 font-bold">キャラクター:</span>
           {mascots.map(m => (

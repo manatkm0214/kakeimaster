@@ -20,9 +20,40 @@ function toFriendlyAuthErrorMessage(msg: string) { return msg; }
 // 型定義のimport
 import type { Profile, Transaction, Budget, NavPage } from "../lib/utils";
 import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
+
+function PrivacyTermsDialog({ onAgree }: { onAgree: () => void }) {
+  const [checked, setChecked] = useState(false);
+    return (
+      <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/60">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-emerald-400 shadow-2xl">
+        <h2 className="text-lg font-bold mb-2 text-slate-900 dark:text-white">ご利用にあたって</h2>
+        <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
+          本サービスを利用するには、
+          <a href="/privacy" target="_blank" className="underline text-emerald-600">プライバシーポリシー</a>
+          と
+          <a href="/terms" target="_blank" className="underline text-emerald-600">利用規約</a>
+          への同意が必要です。
+        </p>
+        <label className="flex items-center gap-2 mb-4">
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} />
+          <span className="text-xs text-slate-700 dark:text-slate-200">上記に同意します</span>
+        </label>
+        <button
+          type="button"
+          className="w-full py-2 rounded-xl font-bold bg-emerald-500 text-white disabled:opacity-50"
+          disabled={!checked}
+          onClick={onAgree}
+        >
+          同意してはじめる
+        </button>
+      </div>
+    </div>
+  );
+}
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "../lib/supabase/client";
 import { formatCurrency } from "../lib/utils";
+import Image from "next/image";
 import Dashboard from "../lib/components/Dashboard";
 import InputForm from "../lib/components/InputForm";
 import BottomNav from "../lib/components/BottomNav";
@@ -54,6 +85,11 @@ export default function Home() {
   const [showProfileSettings, setShowProfileSettings] = useState(false)
   const [showAccountSettings, setShowAccountSettings] = useState(false)
   const [dashboardMode, setDashboardMode] = useState<'normal' | 'kids' | 'senior'>('normal')
+  // プライバシー・規約同意
+  const [agreedPrivacy, setAgreedPrivacy] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("kakeibo-agreed-privacy") === "1";
+  });
   const [authNotice, setAuthNotice] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [authPrefillEmail, setAuthPrefillEmail] = useState("")
   const theme = useSyncExternalStore(subscribeThemeChange, readStoredTheme, () => "dark")
@@ -453,6 +489,13 @@ export default function Home() {
   }
 
   if (showProfileSettings) {
+      // ログイン後、同意していなければダイアログ表示
+      if (user && !agreedPrivacy) {
+        return <PrivacyTermsDialog onAgree={() => {
+          setAgreedPrivacy(true);
+          if (typeof window !== "undefined") window.localStorage.setItem("kakeibo-agreed-privacy", "1");
+        }} />;
+      }
     return (
       <>
         <button
@@ -504,14 +547,29 @@ export default function Home() {
   const now = new Date()
   const isCurrentMonth = currentMonth === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 
+  // 言語対応のためのラベル定義（日本語のみ、将来多言語化可能）
+  const LABELS = {
+    dashboard: "ダッシュボード",
+    input: "入力",
+    kids: "こども",
+    senior: "シニア",
+    calendar: "カレンダー",
+    charts: "グラフ",
+    ai: "AI分析",
+    report: "レポート",
+    goals: "目標・ローン"
+  };
   const NAV_ITEMS = [
-    { page: "dashboard" as const, icon: "📊", label: "ダッシュボード" },
-    { page: "calendar" as const, icon: "📅", label: "カレンダー" },
-    { page: "charts" as const, icon: "📈", label: "グラフ" },
-    { page: "ai" as const, icon: "🤖", label: "AI分析" },
-    { page: "report" as const, icon: "📄", label: "レポート" },
-    { page: "goals" as const, icon: "🎯", label: "目標・ローン" },
-  ]
+    { page: "dashboard" as const, icon: "📊", label: LABELS.dashboard },
+    { page: "input" as const, icon: "📝", label: LABELS.input },
+    { page: "kids" as const, icon: "🧒", label: LABELS.kids },
+    { page: "senior" as const, icon: "👴", label: LABELS.senior },
+    { page: "calendar" as const, icon: "📅", label: LABELS.calendar },
+    { page: "charts" as const, icon: "📈", label: LABELS.charts },
+    { page: "ai" as const, icon: "🤖", label: LABELS.ai },
+    { page: "report" as const, icon: "📄", label: LABELS.report },
+    { page: "goals" as const, icon: "🎯", label: LABELS.goals },
+  ];
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-950">
@@ -519,7 +577,15 @@ export default function Home() {
       {characterUrl && (
         <div className="fixed left-3 bottom-3 z-40 pointer-events-none select-none">
           <div className="animate-float-slow">
-            <img src={characterUrl} alt="キャラクター" className="w-14 h-14 rounded-full object-cover border-4 border-pink-200 shadow-lg" />
+            <Image
+              src={characterUrl}
+              alt="キャラクター"
+              width={56}
+              height={56}
+              className="w-14 h-14 rounded-full object-cover border-4 border-pink-200 shadow-lg"
+              priority
+              unoptimized={typeof characterUrl === "string" && characterUrl.startsWith("data:")}
+            />
           </div>
         </div>
       )}
@@ -592,19 +658,37 @@ export default function Home() {
         <aside className="hidden lg:flex flex-2 min-w-0 flex-col bg-slate-900 border-r border-slate-800 overflow-y-auto no-print">
           <nav className="flex flex-col gap-1 p-3">
             {NAV_ITEMS.map(({ page, icon, label }) => (
-
               <button
                 type="button"
                 key={page}
-                onClick={() => setNavPage(page)}
+                onClick={() => {
+                  // 入力・こども・シニアは専用の切替
+                  if (page === "kids") {
+                    setNavPage("dashboard");
+                    setDashboardMode("kids");
+                  } else if (page === "senior") {
+                    setNavPage("dashboard");
+                    setDashboardMode("senior");
+                  } else if (page === "dashboard") {
+                    setNavPage("dashboard");
+                    setDashboardMode("normal");
+                  } else {
+                    setNavPage(page);
+                  }
+                }}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
-                  navPage === page
+                  (page === "kids" && navPage === "dashboard" && dashboardMode === "kids") ||
+                  (page === "senior" && navPage === "dashboard" && dashboardMode === "senior") ||
+                  (page === "dashboard" && navPage === "dashboard" && dashboardMode === "normal") ||
+                  (page !== "dashboard" && page !== "kids" && page !== "senior" && navPage === page)
                     ? "bg-violet-600/20 text-violet-300 border border-violet-700/40"
                     : "text-slate-400 hover:text-white hover:bg-slate-800"
                 }`}
               >
                 <span className="text-lg">{icon}</span>
                 <span>{label}</span>
+                {page === "kids" && <span className="ml-1 text-xs text-pink-400">(小学生向け)</span>}
+                {page === "senior" && <span className="ml-1 text-xs text-teal-400">(シニア向け)</span>}
               </button>
             ))}
           </nav>
@@ -622,24 +706,33 @@ export default function Home() {
               </div>
             ) : (
               <>
-                {navPage === "dashboard" && dashboardMode === 'normal' && (
+                {/* メイン表示切替 */}
+                {(navPage === "dashboard" && dashboardMode === 'normal') && (
                   <Dashboard
                     transactions={transactions}
                     budgets={budgets}
                     currentMonth={currentMonth}
                     profile={profile}
-                    onOpenSetup={() => setShowProfileSettings(true)}
                   />
                 )}
-                {navPage === "dashboard" && dashboardMode === 'kids' && (
-                  <KidsDashboard transactions={transactions} currentMonth={currentMonth} />
+                {(navPage === "dashboard" && dashboardMode === 'kids') && (
+                  <KidsDashboard
+                    transactions={transactions}
+                    budgets={budgets}
+                    currentMonth={currentMonth}
+                    profile={profile}
+                  />
                 )}
-                {navPage === "dashboard" && dashboardMode === 'senior' && (
-                  <SeniorDashboard transactions={transactions} currentMonth={currentMonth} />
+                {(navPage === "dashboard" && dashboardMode === 'senior') && (
+                  <SeniorDashboard
+                    transactions={transactions}
+                    budgets={budgets}
+                    currentMonth={currentMonth}
+                    profile={profile}
+                  />
                 )}
-                {/* モバイル入力ページ（lgでは右カラムに表示） */}
                 {navPage === "input" && (
-                  <div className="lg:hidden flex flex-col gap-3">
+                  <div className="flex flex-col gap-3">
                     <InputForm
                       recentTransactions={transactions}
                       onSuccess={tx => {
@@ -677,24 +770,6 @@ export default function Home() {
                         ))}
                       </div>
                     </div>
-                  </div>
-                )}
-                {/* lgでは input は dashboard と同じ扱い */}
-                {navPage === "input" && (
-                  <div className="hidden lg:block">
-                    {dashboardMode === 'kids' ? (
-                      <KidsDashboard transactions={transactions} currentMonth={currentMonth} />
-                    ) : dashboardMode === 'senior' ? (
-                      <SeniorDashboard transactions={transactions} currentMonth={currentMonth} />
-                    ) : (
-                      <Dashboard
-                        transactions={transactions}
-                        budgets={budgets}
-                        currentMonth={currentMonth}
-                        profile={profile}
-                        onOpenSetup={() => setShowProfileSettings(true)}
-                      />
-                    )}
                   </div>
                 )}
                 {navPage === "calendar" && (

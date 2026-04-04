@@ -52,6 +52,12 @@ export default function RootLayout({
         <div className="bg-linear-to-r from-blue-500 to-pink-500">
           {/* <MascotWidget /> 削除 */}
         </div>
+        {/* 全ページ共通グローバルナビ */}
+        {typeof window !== "undefined" && (
+          <div suppressHydrationWarning>
+            {React.createElement(require("@/components/GlobalNav").default)}
+          </div>
+        )}
       </body>
     </html>
   );
