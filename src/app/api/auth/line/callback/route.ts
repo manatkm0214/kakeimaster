@@ -50,7 +50,9 @@ export async function GET(request: NextRequest) {
 
   const tokenData = await tokenRes.json().catch(() => null)
   if (!tokenRes.ok || !tokenData?.id_token) {
-    return toHomeWithParams({ auth_error: "LINEトークン交換に失敗しました" })
+    const detail = tokenData?.error_description || tokenData?.error || `status:${tokenRes.status}`
+    console.error("[LINE callback] token error:", JSON.stringify(tokenData), "redirectUri:", redirectUri)
+    return toHomeWithParams({ auth_error: `LINEトークン交換失敗: ${detail}` })
   }
 
   const verifyBody = new URLSearchParams({
