@@ -50,7 +50,7 @@ export default function ContactPage() {
   }
 
   return (
-    <main className="contact-screen min-h-screen bg-slate-950 text-slate-100 p-4">
+    <main className="contact-screen min-h-screen text-slate-800 dark:text-slate-100 p-4" style={{ background: 'var(--background)' }}>
       <div className="max-w-xl mx-auto py-10 space-y-6">
         <div className="flex flex-col items-center mb-6 justify-center">
           <LogoImage />
@@ -64,14 +64,14 @@ export default function ContactPage() {
             {errorMsg}
           </div>
         )}
-        <form onSubmit={handleSubmit} className="contact-panel bg-slate-800/70 border border-slate-700 rounded-2xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="contact-panel bg-white/70 dark:bg-slate-800/70 border border-pink-200 dark:border-slate-700 rounded-2xl p-6 space-y-4">
           <label className="block text-sm">
             お名前
             <input
               type="text"
               value={form.name}
               onChange={(e) => updateField("name", e.target.value)}
-              className="contact-input mt-1 w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5"
+              className="contact-input mt-1 w-full bg-white dark:bg-slate-900 border border-pink-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-100"
               placeholder="山田 太郎"
             />
           </label>
@@ -81,7 +81,7 @@ export default function ContactPage() {
               type="email"
               value={form.email}
               onChange={(e) => updateField("email", e.target.value)}
-              className="contact-input mt-1 w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5"
+              className="contact-input mt-1 w-full bg-white dark:bg-slate-900 border border-pink-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-100"
               placeholder="your@email.com"
             />
           </label>
@@ -91,7 +91,7 @@ export default function ContactPage() {
               type="text"
               value={form.subject}
               onChange={(e) => updateField("subject", e.target.value)}
-              className="contact-input mt-1 w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5"
+              className="contact-input mt-1 w-full bg-white dark:bg-slate-900 border border-pink-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-100"
               placeholder="件名"
             />
           </label>
@@ -100,7 +100,7 @@ export default function ContactPage() {
             <textarea
               value={form.message}
               onChange={(e) => updateField("message", e.target.value)}
-              className="contact-input mt-1 w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5"
+              className="contact-input mt-1 w-full bg-white dark:bg-slate-900 border border-pink-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-100"
               placeholder="ご用件を入力してください"
               rows={4}
             />

@@ -3,30 +3,38 @@
 import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useCharacterImage } from '../../lib/hooks/useCharacterImage'
+
+function CharacterHeader() {
+  const { characterUrl, characterName } = useCharacterImage()
+  if (!characterUrl) return null
+  return (
+    <div className="flex items-center gap-4 mb-6">
+      <div className="animate-bounce-slow">
+        <Image
+          src={characterUrl}
+          alt={characterName || 'キャラクター'}
+          width={80}
+          height={80}
+          className="w-20 h-20 rounded-full object-cover border-4 border-pink-300 shadow-idol"
+          unoptimized
+        />
+      </div>
+      {characterName && (
+        <span className="text-sm font-bold text-pink-400 dark:text-violet-300">{characterName}</span>
+      )}
+    </div>
+  )
+}
 
 export default function PrivacyPolicy() {
   return (
-    <div className="min-h-screen bg-slate-950 py-12 px-4">
-      <div className="max-w-4xl mx-auto bg-slate-900/60 border border-slate-700/50 rounded-2xl p-8">
+    <div className="min-h-screen py-12 px-4" style={{ background: 'var(--background)' }}>
+      <div className="max-w-4xl mx-auto bg-white/70 dark:bg-slate-900/60 border border-pink-200 dark:border-slate-700/50 rounded-2xl p-8">
+        <CharacterHeader />
         <h1 className="text-4xl font-bold mb-2">
           プライバシーポリシー
         </h1>
-      <div className="flex items-center gap-6 mb-6">
-        <Image
-          src="/default-image.png"
-          alt="画像"
-          width={80}
-          height={80}
-          className="w-20 h-20 rounded-full border-4 border-pink-300 bg-white object-cover"
-        />
-        <Image
-          src="/default-image.png"
-          alt="画像"
-          width={80}
-          height={80}
-          className="w-20 h-20 rounded-full border-4 border-blue-300 bg-white object-cover"
-        />
-      </div>
         <p className="text-slate-400 mb-8">最終更新: 2026年4月2日</p>
 
         <div className="space-y-6 text-slate-300">
@@ -43,15 +51,15 @@ export default function PrivacyPolicy() {
           </div>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">1. はじめに</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">1. はじめに</h2>
             <p>
               本アプリケーション（以下「当アプリ」）は、ユーザーのプライバシーを尊重し、個人情報の保護に最大限の努力をいたします。このプライバシーポリシー（以下「本ポリシー」）は、当アプリがどのように情報を収集、使用、保護するかについて説明しています。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">2. 収集する情報</h2>
-            <h3 className="text-xl font-semibold text-slate-200 mb-2">2.1 ユーザーが直接提供する情報</h3>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">2. 収集する情報</h2>
+            <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-2">2.1 ユーザーが直接提供する情報</h3>
             <ul className="list-disc list-inside space-y-2 ml-2">
               <li>メールアドレス</li>
               <li>パスワード</li>
@@ -59,7 +67,7 @@ export default function PrivacyPolicy() {
               <li>家計管理に関するデータ（収入、支出、予算情報）</li>
             </ul>
 
-            <h3 className="text-xl font-semibold text-slate-200 mb-2 mt-4">2.2 自動的に収集される情報</h3>
+            <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-2 mt-4">2.2 自動的に収集される情報</h3>
             <ul className="list-disc list-inside space-y-2 ml-2">
               <li>IPアドレス</li>
               <li>ブラウザ情報、OSタイプ</li>
@@ -69,7 +77,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">3. 情報の使用目的</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">3. 情報の使用目的</h2>
             <ul className="list-disc list-inside space-y-2 ml-2">
               <li>ユーザー認証および本人確認</li>
               <li>家計管理サービスの提供</li>
@@ -82,7 +90,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">4. AI分析機能について</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">4. AI分析機能について</h2>
             <p className="mb-2">
               当アプリはClaudeAIを活用した財務分析機能を提供しています。以下の点にご注意ください：
             </p>
@@ -95,7 +103,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">5. 情報の保護</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">5. 情報の保護</h2>
             <ul className="list-disc list-inside space-y-2 ml-2">
               <li>すべてのデータはSupabaseの暗号化されたサーバーに保存されます</li>
               <li>通信はSSL/TLSプロトコルで暗号化されます</li>
@@ -105,7 +113,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">6. 情報の共有</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">6. 情報の共有</h2>
             <p>
               当アプリは、以下の場合を除きユーザーの個人情報を第三者と共有しません：
             </p>
@@ -119,7 +127,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">7. ユーザーの権利</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">7. ユーザーの権利</h2>
             <ul className="list-disc list-inside space-y-2 ml-2">
               <li>自身の個人情報へのアクセス権</li>
               <li>情報の修正或いは削除を要求する権利</li>
@@ -129,21 +137,21 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">8. Cookieについて</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">8. Cookieについて</h2>
             <p>
               当アプリはセッション管理および機能向上のためにCookieを使用することがあります。ブラウザの設定でCookieを無効化できますが、一部の機能が正常に動作しない可能性があります。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">9. ポリシーの変更</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">9. ポリシーの変更</h2>
             <p>
               当アプリは本ポリシーを随時更新する権利を有します。重大な変更の場合は、ユーザーに事前に通知します。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold text-white mb-4">10. お問い合わせ</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">10. お問い合わせ</h2>
             <p>
               本ポリシーに関するご質問やご不明な点は、アプリ内のお問い合わせフォームからご連絡ください。
             </p>
